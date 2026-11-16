@@ -1,4 +1,4 @@
-/// Un lieu du campus (Bibliothèque, Resto U, Amphithéâtres…).
+/// Un lieu du campus (Bibliothèque, Resto , Amphithéâtres…).
 class Lieu {
   final int id;
   final String nom;
