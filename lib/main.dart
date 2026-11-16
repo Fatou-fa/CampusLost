@@ -1,3 +1,4 @@
+import 'package:campuslost/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/accueil_screen.dart';
@@ -20,7 +21,7 @@ class CampusLostApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Couleurs.marron),
         useMaterial3: true,
       ),
-      home: const AccueilScreen(),
+      home: const LoginScreen(),
     );
   }
 }
