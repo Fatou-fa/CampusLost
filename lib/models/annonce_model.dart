@@ -26,37 +26,6 @@ class Annonce {
     required this.auteurNom,
   });
 
-  /// Crée une annonce à partir du JSON renvoyé par l'API.
-  factory Annonce.fromJson(Map<String, dynamic> json) {
-    return Annonce(
-      id: int.parse(json['id'].toString()),
-      titre: json['titre'],
-      description: json['description'] ?? '',
-      type: json['type'],
-      statut: json['statut'],
-      photoUrl: json['photo_url'],
-      date: json['date_annonce'],
-      categorie: json['categorie'],
-      lieu: json['lieu'],
-      auteurId: int.parse(json['auteur_id'].toString()),
-      auteurNom: json['auteur_nom'],
-    );
-  }
-
-  /// Transforme l'annonce en JSON pour l'envoyer à l'API.
-  ///
-  /// On n'envoie pas l'auteur : l'API le retrouve grâce au jeton de connexion.
-  Map<String, dynamic> toJson() {
-    return {
-      'titre': titre,
-      'description': description,
-      'type': type,
-      'date_annonce': date,
-      'categorie': categorie,
-      'lieu': lieu,
-    };
-  }
-
   /// Vrai si l'objet a été perdu.
   bool get estPerdue => type == 'perdu';
 

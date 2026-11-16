@@ -4,12 +4,4 @@ class Categorie {
   final String libelle;
 
   Categorie({required this.id, required this.libelle});
-
-  /// Crée une catégorie à partir du JSON renvoyé par l'API.
-  factory Categorie.fromJson(Map<String, dynamic> json) {
-    return Categorie(
-      id: int.parse(json['id'].toString()),
-      libelle: json['libelle'],
-    );
-  }
 }

@@ -15,26 +15,4 @@ class Utilisateur {
     required this.email,
     required this.telephone,
   });
-
-  /// Crée un utilisateur à partir du JSON renvoyé par l'API.
-  factory Utilisateur.fromJson(Map<String, dynamic> json) {
-    return Utilisateur(
-      id: int.parse(json['id'].toString()),
-      nom: json['nom'],
-      prenom: json['prenom'],
-      email: json['email'],
-      telephone: json['telephone'].toString(),
-    );
-  }
-
-  /// Transforme l'utilisateur en JSON pour l'envoyer à l'API.
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'nom': nom,
-      'prenom': prenom,
-      'email': email,
-      'telephone': telephone,
-    };
-  }
 }

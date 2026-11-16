@@ -20,20 +20,6 @@ class Reclamation {
     required this.demandeurNom,
   });
 
-  /// Crée une réclamation à partir du JSON renvoyé par l'API.
-  factory Reclamation.fromJson(Map<String, dynamic> json) {
-    return Reclamation(
-      id: int.parse(json['id'].toString()),
-      message: json['message'],
-      date: json['date_reclamation'],
-      statut: json['statut'],
-      annonceId: int.parse(json['annonce_id'].toString()),
-      annonceTitre: json['annonce_titre'],
-      demandeurId: int.parse(json['demandeur_id'].toString()),
-      demandeurNom: json['demandeur_nom'],
-    );
-  }
-
   /// Vrai si le trouveur n'a pas encore répondu.
   bool get estEnAttente => statut == 'en_attente';
 }
