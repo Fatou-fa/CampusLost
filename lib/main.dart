@@ -1,7 +1,13 @@
-import 'package:campuslost/screens/login_screen.dart';
 import 'package:flutter/material.dart';
 
+import 'models/annonce_model.dart';
 import 'screens/accueil_screen.dart';
+import 'screens/bienvenue_screen.dart';
+import 'screens/choix_type_screen.dart';
+import 'screens/detail_annonce_screen.dart';
+import 'screens/formulaire_annonce_screen.dart';
+import 'screens/inscription_screen.dart';
+import 'screens/login_screen.dart';
 import 'theme/couleurs.dart';
 
 void main() {
@@ -21,7 +27,34 @@ class CampusLostApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Couleurs.marron),
         useMaterial3: true,
       ),
-      home: const LoginScreen(),
+      // Écran affiché au lancement.
+      // Pas encore de navigation : pour voir un autre écran, garde UNE seule
+      // ligne « home: » active et mets les autres en commentaire.
+      home: const LoginScreen(), // page de connexion (Gilbert)
+      //home: const BienvenueScreen(),
+      //home: const InscriptionScreen(),
+      //home: const AccueilScreen(),
+      //home: const ChoixTypeScreen(),
+      //home: const FormulaireAnnonceScreen(),              // objet trouvé
+      //home: const FormulaireAnnonceScreen(type: 'perdu'), // objet perdu
+      //home: DetailAnnonceScreen(annonce: annonceExemple),
     );
   }
 }
+
+/// Annonce d'exemple pour tester l'écran de détail sans navigation.
+final annonceExemple = Annonce(
+  id: 2,
+  titre: 'Trousseau de clés',
+  description:
+      "Deux clés sur un anneau argenté, dont une dorée. Trouvées sur une "
+      "table près de l'entrée du Resto U, à l'heure du déjeuner.",
+  type: 'trouve',
+  statut: 'active',
+  photoUrl: 'assets/images/objets/cles.png',
+  date: 'Hier, 12 h 30',
+  categorie: 'Clés',
+  lieu: 'Resto U',
+  auteurId: 2,
+  auteurNom: 'Moussa D.',
+);
