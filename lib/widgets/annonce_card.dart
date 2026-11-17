@@ -3,78 +3,118 @@ import 'package:flutter/material.dart';
 import '../models/annonce_model.dart';
 import '../theme/couleurs.dart';
 
-/// Carte affichant le résumé d'une annonce dans une liste.
+/// Carte d'une annonce (affichage seul) : photo de l'objet, badge
+/// Perdu / Trouvé, titre, lieu et date.
 class AnnonceCard extends StatelessWidget {
   final Annonce annonce;
-  final VoidCallback? onTap; // action au clic (ouvrir le détail)
-
-  const AnnonceCard({super.key, required this.annonce, this.onTap});
+  const AnnonceCard({super.key, required this.annonce});
 
   @override
   Widget build(BuildContext context) {
-    // Beige clair pour « perdu », beige plus soutenu pour « trouvé »
-    final couleurBadge =
-        annonce.estPerdue ? Couleurs.beigeClair : Couleurs.beigeTrouve;
-    final texteBadge = annonce.estPerdue ? 'PERDU' : 'TROUVÉ';
+    // Perdu : beige clair et texte brun ; Trouvé : marron et texte blanc
+    final fondBadge = annonce.estPerdue ? Couleurs.beigeClair : Couleurs.marron;
+    final texteBadge = annonce.estPerdue ? Couleurs.marron : Colors.white;
 
-    return Card(
-      color: Colors.white,
-      elevation: 0,
-      margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Couleurs.bordure),
-      ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.all(12),
-        // Icône à gauche
-        leading: Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: couleurBadge,
-            borderRadius: BorderRadius.circular(14),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        // Ombre douce : la carte semble posée sur la page
+        boxShadow: [
+          BoxShadow(
+            color: Couleurs.marronFonce.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 6),
           ),
-          child: const Icon(Icons.inventory_2_outlined, color: Couleurs.marron),
-        ),
-        // Badge + titre
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: couleurBadge,
-                borderRadius: BorderRadius.circular(6),
+        ],
+      ),
+      child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              // ---------- Photo de l'objet ----------
+              Container(
+                width: 84,
+                height: 84,
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Couleurs.beigeTrouve,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: annonce.photoUrl != null
+                    ? Image.asset(annonce.photoUrl!, fit: BoxFit.contain)
+                    : const Icon(Icons.inventory_2_outlined,
+                        color: Couleurs.marron, size: 36),
               ),
-              child: Text(
-                texteBadge,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color: Couleurs.marron,
+              const SizedBox(width: 14),
+
+              // ---------- Textes ----------
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Badge Perdu / Trouvé
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: fondBadge,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        annonce.estPerdue ? 'Perdu' : 'Trouvé',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: texteBadge,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      annonce.titre,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Couleurs.texte,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    // Lieu
+                    Row(
+                      children: [
+                        const Icon(Icons.place_outlined,
+                            size: 15, color: Couleurs.texteDiscret),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            annonce.lieu,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 13, color: Couleurs.texteDiscret),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    // Date
+                    Row(
+                      children: [
+                        const Icon(Icons.schedule,
+                            size: 15, color: Couleurs.texteDiscret),
+                        const SizedBox(width: 4),
+                        Text(
+                          annonce.date,
+                          style: const TextStyle(
+                              fontSize: 13, color: Couleurs.texteDiscret),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              annonce.titre,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-          ],
-        ),
-        // Lieu et date
-        subtitle: Row(
-          children: [
-            const Icon(Icons.place_outlined,
-                size: 14, color: Couleurs.texteDiscret),
-            const SizedBox(width: 4),
-            // Flexible : le texte passe à la ligne au lieu de déborder
-            Flexible(child: Text('${annonce.lieu} · ${annonce.date}')),
-          ],
-        ),
-        trailing: const Icon(Icons.chevron_right),
+            ],
+          ),
       ),
     );
   }

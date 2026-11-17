@@ -4,7 +4,7 @@ import '../models/annonce_model.dart';
 import '../theme/couleurs.dart';
 import '../widgets/annonce_card.dart';
 
-/// Écran d'accueil : recherche, filtres et liste des annonces récentes.
+/// Écran d'accueil : recherche, bannière, catégories et annonces récentes.
 class AccueilScreen extends StatefulWidget {
   const AccueilScreen({super.key});
 
@@ -13,11 +13,20 @@ class AccueilScreen extends StatefulWidget {
 }
 
 class _AccueilScreenState extends State<AccueilScreen> {
-  // Filtre sélectionné : 'tous', 'perdu' ou 'trouve'
-  String filtre = 'tous';
-
   // Texte tapé dans la barre de recherche
   String recherche = '';
+
+  // Catégories affichées en haut : [libellé, image]
+  final List<List<String>> categories = [
+    ['Clés', 'assets/images/objets/cles.png'],
+    ['Téléphones', 'assets/images/objets/telephone.png'],
+    ['Papiers', 'assets/images/objets/carte.png'],
+    ['Lunettes', 'assets/images/objets/lunettes.png'],
+    ['Portefeuilles', 'assets/images/objets/portefeuille.png'],
+    ['Audio', 'assets/images/objets/ecouteurs.png'],
+    ['Fournitures', 'assets/images/objets/calculatrice.png'],
+    ['Autres', 'assets/images/objets/autres.png'], // tout ce qui n'entre pas ailleurs
+  ];
 
   // Données d'exemple, en attendant l'API PHP
   final List<Annonce> annonces = [
@@ -27,9 +36,10 @@ class _AccueilScreenState extends State<AccueilScreen> {
       description: '',
       type: 'perdu',
       statut: 'active',
-      date: "aujourd'hui",
+      photoUrl: 'assets/images/objets/carte.png',
+      date: 'Il y a 2 h',
       categorie: 'Papiers',
-      lieu: 'Bibliothèque',
+      lieu: 'Bibliothèque universitaire',
       auteurId: 1,
       auteurNom: 'Awa N.',
     ),
@@ -39,7 +49,8 @@ class _AccueilScreenState extends State<AccueilScreen> {
       description: '',
       type: 'trouve',
       statut: 'active',
-      date: 'hier',
+      photoUrl: 'assets/images/objets/cles.png',
+      date: 'Hier, 12 h 30',
       categorie: 'Clés',
       lieu: 'Resto U',
       auteurId: 2,
@@ -47,156 +58,229 @@ class _AccueilScreenState extends State<AccueilScreen> {
     ),
     Annonce(
       id: 3,
-      titre: 'Téléphone',
+      titre: 'Smartphone bleu',
       description: '',
       type: 'perdu',
       statut: 'active',
-      date: 'lundi',
+      photoUrl: 'assets/images/objets/telephone.png',
+      date: 'Lundi',
       categorie: 'Électronique',
-      lieu: 'Amphithéâtre',
+      lieu: 'Amphithéâtre A',
       auteurId: 3,
       auteurNom: 'Ibrahima S.',
     ),
     Annonce(
       id: 4,
-      titre: 'Clé USB',
+      titre: 'Lunettes de vue',
       description: '',
       type: 'trouve',
       statut: 'active',
-      date: 'lundi',
-      categorie: 'Électronique',
+      photoUrl: 'assets/images/objets/lunettes.png',
+      date: 'Lundi',
+      categorie: 'Lunettes',
       lieu: 'Salle informatique',
       auteurId: 2,
       auteurNom: 'Moussa D.',
+    ),
+    Annonce(
+      id: 5,
+      titre: 'Portefeuille marron',
+      description: '',
+      type: 'trouve',
+      statut: 'active',
+      photoUrl: 'assets/images/objets/portefeuille.png',
+      date: 'Dimanche',
+      categorie: 'Portefeuilles',
+      lieu: 'Terrain de sport',
+      auteurId: 4,
+      auteurNom: 'Khady F.',
     ),
   ];
 
   @override
   Widget build(BuildContext context) {
-    // On garde seulement les annonces qui correspondent au filtre ET à la recherche
-    final resultats = annonces.where((a) {
-      final bonType = filtre == 'tous' || a.type == filtre;
-      final bonTexte = a.titre.toLowerCase().contains(recherche.toLowerCase());
-      return bonType && bonTexte;
-    }).toList();
+    // On garde les annonces dont le titre contient le texte recherché
+    final resultats = annonces
+        .where((a) => a.titre.toLowerCase().contains(recherche.toLowerCase()))
+        .toList();
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
-      body: Column(
+      // ListView : toute la page défile, en-tête compris
+      body: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          // ---------- En-tête marron ----------
-          Container(
-            width: double.infinity,
-            color: Couleurs.marronFonce,
-            padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Bonjour Awa',
-                  style: TextStyle(color: Color(0xFFEADCC4)),
-                ),
-                const Text(
-                  "Qu'avez-vous perdu ?",
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Barre de recherche
-                TextField(
-                  onChanged: (texte) => setState(() => recherche = texte),
-                  decoration: InputDecoration(
-                    hintText: 'Rechercher un objet…',
-                    prefixIcon: const Icon(Icons.search),
-                    filled: true,
-                    fillColor: Colors.white,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // ---------- Puces de filtre ----------
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: Row(
-              children: [
-                _puce('Tous', 'tous'),
-                _puce('Perdus', 'perdu'),
-                _puce('Trouvés', 'trouve'),
-              ],
-            ),
-          ),
+          _enTete(),
+          const SizedBox(height: 20),
+          _titreSection('Catégories'),
+          const SizedBox(height: 12),
+          _listeCategories(),
+          const SizedBox(height: 24),
+          _titreSection('Annonces récentes', detail: '${resultats.length} annonces'),
+          const SizedBox(height: 12),
 
           // ---------- Liste des annonces ----------
-          Expanded(
-            child: resultats.isEmpty
-                ? const Center(child: Text('Aucune annonce trouvée'))
-                : ListView.builder(
-                    padding: const EdgeInsets.all(20),
-                    itemCount: resultats.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AnnonceCard(
-                        annonce: resultats[index],
-                        onTap: () {
-                          // Plus tard : ouvrir l'écran de détail
-                        },
-                      ),
-                    ),
-                  ),
-          ),
+          if (resultats.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Text(
+                'Aucune annonce ne correspond à votre recherche.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Couleurs.texteDiscret),
+              ),
+            )
+          else
+            for (final annonce in resultats)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                child: AnnonceCard(annonce: annonce),
+              ),
+          const SizedBox(height: 24),
         ],
       ),
 
-      // ---------- Bouton « + » pour publier ----------
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: Couleurs.beige,
-        foregroundColor: Couleurs.texte,
-        onPressed: () {
-          // Plus tard : ouvrir l'écran « Publier une annonce »
-        },
-        child: const Icon(Icons.add),
-      ),
+    );
+  }
 
-      // ---------- Barre de navigation ----------
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: 0,
-        indicatorColor: Couleurs.beigeClair,
-        destinations: const [
-          NavigationDestination(
-              icon: Icon(Icons.home_outlined), label: 'Accueil'),
-          NavigationDestination(
-              icon: Icon(Icons.list_alt), label: 'Mes annonces'),
-          NavigationDestination(
-              icon: Icon(Icons.inbox_outlined), label: 'Réclamations'),
-          NavigationDestination(
-              icon: Icon(Icons.person_outline), label: 'Profil'),
+  /// En-tête marron arrondi : logo, salutation et barre de recherche.
+  Widget _enTete() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      decoration: const BoxDecoration(
+        color: Couleurs.marronFonce,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+      ),
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset('assets/images/icone_app.png',
+                      width: 44, height: 44),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Bonjour Fatou',
+                        style: TextStyle(color: Color(0xFFEADCC4), fontSize: 14),
+                      ),
+                      Text(
+                        'CampusLost',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            const Text(
+              "Qu'avez-vous perdu\naujourd'hui ?",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 26,
+                height: 1.2,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 18),
+            // Barre de recherche
+            TextField(
+              onChanged: (texte) => setState(() => recherche = texte),
+              decoration: InputDecoration(
+                hintText: 'Rechercher un objet…',
+                prefixIcon: const Icon(Icons.search, color: Couleurs.marron),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Titre de section, avec un petit texte à droite si besoin.
+  Widget _titreSection(String titre, {String? detail}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            titre,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Couleurs.marronFonce,
+            ),
+          ),
+          if (detail != null)
+            Text(detail,
+                style: const TextStyle(fontSize: 13, color: Couleurs.texteDiscret)),
         ],
       ),
     );
   }
 
-  /// Crée une puce de filtre. Elle est marron quand elle est sélectionnée.
-  Widget _puce(String texte, String valeur) {
-    final selectionnee = filtre == valeur;
+  /// Catégories affichées en grille : si elles ne tiennent pas sur une ligne,
+  /// elles passent à la ligne suivante (Wrap), sans défilement horizontal.
+  Widget _listeCategories() {
     return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        label: Text(texte),
-        selected: selectionnee,
-        selectedColor: Couleurs.marronFonce,
-        showCheckmark: false,
-        labelStyle:
-            TextStyle(color: selectionnee ? Colors.white : Couleurs.texte),
-        onSelected: (_) => setState(() => filtre = valeur),
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Wrap(
+        spacing: 12, // espace horizontal entre deux catégories
+        runSpacing: 16, // espace vertical entre deux lignes
+        children: [
+          for (final categorie in categories)
+            SizedBox(
+              width: 76,
+              child: Column(
+                children: [
+                  Container(
+                    width: 76,
+                    height: 76,
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Couleurs.marronFonce.withValues(alpha: 0.08),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Image.asset(categorie[1], fit: BoxFit.contain),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    categorie[0],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12, color: Couleurs.texte),
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
