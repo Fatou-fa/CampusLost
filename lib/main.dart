@@ -27,20 +27,23 @@ class CampusLostApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Couleurs.marron),
         useMaterial3: true,
       ),
-      // Écran affiché au lancement.
-      // Pas encore de navigation : pour voir un autre écran, garde UNE seule
-      // ligne « home: » active et mets les autres en commentaire.
-      home: const LoginScreen(), // page de connexion (Gilbert)
+    
+      // Pas encore de navigation
+
       //home: const BienvenueScreen(),
       //home: const InscriptionScreen(),
+      //home: const LoginScreen(), 
       //home: const AccueilScreen(),
+
       //home: const ChoixTypeScreen(),
       //home: const FormulaireAnnonceScreen(),              // objet trouvé
       //home: const FormulaireAnnonceScreen(type: 'perdu'), // objet perdu
-      //home: DetailAnnonceScreen(annonce: annonceExemple),
+      home: DetailAnnonceScreen(annonce: annonceExemple),
     );
   }
 }
+
+
 
 /// Annonce d'exemple pour tester l'écran de détail sans navigation.
 final annonceExemple = Annonce(
@@ -52,7 +55,7 @@ final annonceExemple = Annonce(
   type: 'trouve',
   statut: 'active',
   photoUrl: 'assets/images/objets/cles.png',
-  date: 'Hier, 12 h 30',
+  date: '17/11/2025, 12 h 30',
   categorie: 'Clés',
   lieu: 'Resto U',
   auteurId: 2,
