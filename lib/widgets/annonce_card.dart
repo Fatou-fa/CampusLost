@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../models/annonce_model.dart';
 import '../theme/couleurs.dart';
 
-/// Carte d'une annonce (affichage seul) : photo de l'objet, badge
-/// Perdu / Trouvé, titre, lieu et date.
+/// Carte d'une annonce : photo de l'objet, badge Perdu / Trouvé, titre,
+/// lieu et date. [onTap] est appelé quand on appuie sur la carte.
 class AnnonceCard extends StatelessWidget {
   final Annonce annonce;
-  const AnnonceCard({super.key, required this.annonce});
+  final VoidCallback? onTap;
+  const AnnonceCard({super.key, required this.annonce, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +29,13 @@ class AnnonceCard extends StatelessWidget {
           ),
         ],
       ),
-      child: Padding(
+      // Material + InkWell : effet d'onde au toucher, sans perdre l'ombre
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
@@ -113,8 +120,11 @@ class AnnonceCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const Icon(Icons.chevron_right, color: Couleurs.texteDiscret),
             ],
           ),
+          ),
+        ),
       ),
     );
   }

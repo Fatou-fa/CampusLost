@@ -1,5 +1,8 @@
+import 'package:campuslost/config/routes.dart';
+import 'package:campuslost/providers/auth_provider.dart';
 import 'package:campuslost/theme/couleurs.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,6 +21,23 @@ class _LoginScreenState extends State<LoginScreen> {
     email.dispose();
     password.dispose();
     super.dispose();
+  }
+
+  /// Vérifie le formulaire, ouvre la session puis affiche l'accueil.
+  Future<void> _seConnecter() async {
+    if (!formKey.currentState!.validate()) return;
+
+    final auth = context.read<AuthProvider>();
+    final reussi = await auth.connecter(email.text, password.text);
+    if (!mounted) return;
+
+    if (reussi) {
+      // Pile vidée : le retour ne ramène pas à la connexion
+      Navigator.pushNamedAndRemoveUntil(context, Routes.accueil, (_) => false);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(auth.erreur ?? 'Erreur')));
+    }
   }
 
   @override
@@ -84,7 +104,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     hintText: 'prenom.nom@ugb.edu.sn',
                     hintStyle: TextStyle(
-                      color: Couleurs.texteDiscret.withOpacity(0.6),
+                      color: Couleurs.texteDiscret.withValues(alpha: 0.6),
                     ),
                     filled: true,
                     fillColor: Colors.white,
@@ -134,7 +154,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   decoration: InputDecoration(
                     hintText: '••••••••',
                     hintStyle: TextStyle(
-                      color: Couleurs.texteDiscret.withOpacity(0.6),
+                      color: Couleurs.texteDiscret.withValues(alpha: 0.6),
                     ),
                     filled: true,
                     fillColor: Colors.white,
@@ -200,15 +220,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    onPressed: () {
-                      if (formKey.currentState!.validate()) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Connexion simulée'),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: _seConnecter,
                     child: const Text(
                       'Se connecter',
                       style: TextStyle(

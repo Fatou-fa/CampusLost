@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../config/routes.dart';
 import '../theme/couleurs.dart';
 
 /// Première page de l'application.
@@ -70,9 +71,8 @@ class BienvenueScreen extends StatelessWidget {
 
                   // Bouton principal
                   ElevatedButton(
-                    onPressed: () {
-                      // Plus tard : ouvrir l'écran d'inscription
-                    },
+                    onPressed: () =>
+                        Navigator.pushNamed(context, Routes.inscription),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Couleurs.marron,
                       foregroundColor: Colors.white,
@@ -91,9 +91,8 @@ class BienvenueScreen extends StatelessWidget {
 
                   // Bouton secondaire
                   OutlinedButton(
-                    onPressed: () {
-                      // Plus tard : ouvrir l'écran de connexion
-                    },
+                    onPressed: () =>
+                        Navigator.pushNamed(context, Routes.connexion),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Couleurs.marron,
                       side: const BorderSide(color: Couleurs.marron, width: 1.5),

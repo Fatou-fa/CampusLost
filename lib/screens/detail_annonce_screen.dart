@@ -4,7 +4,8 @@ import '../models/annonce_model.dart';
 import '../theme/couleurs.dart';
 
 /// Détail d'une annonce : grande photo de l'objet, informations, description
-/// et personne qui l'a publiée. Affichage seul pour l'instant.
+/// et personne qui l'a publiée. Ouvert depuis l'accueil (appui sur une
+/// carte) ; le bouton en haut à gauche ramène à la liste.
 class DetailAnnonceScreen extends StatelessWidget {
   final Annonce annonce;
 
@@ -17,7 +18,7 @@ class DetailAnnonceScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          _photo(),
+          _photo(context),
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
             child: Column(
@@ -174,8 +175,9 @@ class DetailAnnonceScreen extends StatelessWidget {
     );
   }
 
-  /// Grande photo de l'objet sur fond beige, avec le badge Perdu / Trouvé.
-  Widget _photo() {
+  /// Grande photo de l'objet sur fond beige, avec le bouton retour
+  /// et le badge Perdu / Trouvé.
+  Widget _photo(BuildContext context) {
     return Container(
       height: 320,
       decoration: const BoxDecoration(
@@ -196,9 +198,23 @@ class DetailAnnonceScreen extends StatelessWidget {
                         size: 120, color: Couleurs.marron),
               ),
             ),
-            // Badge en haut à gauche
+            // Bouton retour (seulement s'il y a un écran précédent)
+            if (Navigator.canPop(context))
+              Positioned(
+                left: 12,
+                top: 8,
+                child: CircleAvatar(
+                  backgroundColor: Colors.white,
+                  child: IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.arrow_back, color: Couleurs.marron),
+                    tooltip: 'Retour',
+                  ),
+                ),
+              ),
+            // Badge en haut à droite
             Positioned(
-              left: 20,
+              right: 20,
               top: 16,
               child: Container(
                 padding:

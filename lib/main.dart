@@ -1,17 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import 'models/annonce_model.dart';
-import 'screens/accueil_screen.dart';
-import 'screens/bienvenue_screen.dart';
-import 'screens/choix_type_screen.dart';
-import 'screens/detail_annonce_screen.dart';
-import 'screens/formulaire_annonce_screen.dart';
-import 'screens/inscription_screen.dart';
-import 'screens/login_screen.dart';
+import 'config/routes.dart';
+import 'providers/annonce_provider.dart';
+import 'providers/auth_provider.dart';
 import 'theme/couleurs.dart';
 
-void main() {
-  runApp(const CampusLostApp());
+/// Point d'entrée de CampusLost.
+///
+/// Avant d'afficher le premier écran, on regarde si un utilisateur est déjà
+/// connecté sur ce téléphone (connexion unique) :
+///  - oui → on ouvre directement l'accueil ;
+///  - non → on ouvre l'écran de bienvenue (inscription / connexion).
+Future<void> main() async {
+  // Obligatoire avant d'utiliser un plugin (SharedPreferences) dans main()
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final auth = AuthProvider();
+  await auth.chargerSession();
+
+  runApp(
+    // MultiProvider rend les providers accessibles à tous les écrans
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: auth),
+        ChangeNotifierProvider(create: (_) => AnnonceProvider()),
+      ],
+      child: const CampusLostApp(),
+    ),
+  );
 }
 
 /// Racine de l'application CampusLost.
@@ -20,6 +37,9 @@ class CampusLostApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // read : on lit l'état une seule fois, au démarrage
+    final dejaConnecte = context.read<AuthProvider>().estConnecte;
+
     return MaterialApp(
       title: 'CampusLost',
       debugShowCheckedModeBanner: false, // retire le bandeau « DEBUG »
@@ -27,37 +47,9 @@ class CampusLostApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Couleurs.marron),
         useMaterial3: true,
       ),
-    
-      // Pas encore de navigation
-
-      //home: const BienvenueScreen(),
-      //home: const InscriptionScreen(),
-      //home: const LoginScreen(), 
-      //home: const AccueilScreen(),
-
-      //home: const ChoixTypeScreen(),
-      //home: const FormulaireAnnonceScreen(),              // objet trouvé
-      //home: const FormulaireAnnonceScreen(type: 'perdu'), // objet perdu
-      home: DetailAnnonceScreen(annonce: annonceExemple),
+      // Premier écran selon la session, puis navigation par nom (Routes)
+      initialRoute: dejaConnecte ? Routes.accueil : Routes.bienvenue,
+      onGenerateRoute: Routes.generer,
     );
   }
 }
-
-
-
-/// Annonce d'exemple pour tester l'écran de détail sans navigation.
-final annonceExemple = Annonce(
-  id: 2,
-  titre: 'Trousseau de clés',
-  description:
-      "Deux clés sur un anneau argenté, dont une dorée. Trouvées sur une "
-      "table près de l'entrée du Resto U, à l'heure du déjeuner.",
-  type: 'trouve',
-  statut: 'active',
-  photoUrl: 'assets/images/objets/cles.png',
-  date: '17/11/2025, 12 h 30',
-  categorie: 'Clés',
-  lieu: 'Resto U',
-  auteurId: 2,
-  auteurNom: 'Moussa D.',
-);
