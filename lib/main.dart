@@ -1,5 +1,8 @@
 import 'package:campuslost/screens/inscription_screen.dart';
 import 'package:campuslost/screens/login_screen.dart';
+import 'package:campuslost/screens/mes_annonces_screen.dart';
+import 'package:campuslost/screens/profil_screen.dart';
+import 'package:campuslost/screens/reclamations_screen.dart';
 import 'package:flutter/material.dart';
 
 import 'screens/accueil_screen.dart';
@@ -24,8 +27,10 @@ class CampusLostApp extends StatelessWidget {
       ),
       //home: const AccueilScreen(),
       // home: const LoginScreen(),
-      home: const InscriptionScreen(),
-
+      //home: const InscriptionScreen(),
+      //home: MesAnnoncesScreen(),
+      home: ProfilScreen(),
+      //home: ReclamationsScreen(),
     );
   }
 }
