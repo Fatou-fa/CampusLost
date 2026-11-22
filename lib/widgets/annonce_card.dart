@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/annonce_model.dart';
 import '../theme/couleurs.dart';
+import 'photo_annonce.dart';
 
 /// Carte d'une annonce : photo de l'objet, badge Perdu / Trouvé, titre,
 /// lieu et date. [onTap] est appelé quand on appuie sur la carte.
@@ -13,8 +14,13 @@ class AnnonceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Perdu : beige clair et texte brun ; Trouvé : marron et texte blanc
-    final fondBadge = annonce.estPerdue ? Couleurs.beigeClair : Couleurs.marron;
-    final texteBadge = annonce.estPerdue ? Couleurs.marron : Colors.white;
+    // Restitué : vert doux
+    final fondBadge = annonce.estRestituee
+        ? const Color(0xFFE3F3EA)
+        : (annonce.estPerdue ? Couleurs.beigeClair : Couleurs.marron);
+    final texteBadge = annonce.estRestituee
+        ? const Color(0xFF1F6E43)
+        : (annonce.estPerdue ? Couleurs.marron : Colors.white);
 
     return Container(
       decoration: BoxDecoration(
@@ -48,10 +54,8 @@ class AnnonceCard extends StatelessWidget {
                   color: Couleurs.beigeTrouve,
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: annonce.photoUrl != null
-                    ? Image.asset(annonce.photoUrl!, fit: BoxFit.contain)
-                    : const Icon(Icons.inventory_2_outlined,
-                        color: Couleurs.marron, size: 36),
+                // Image de l'app, photo du téléphone ou icône
+                child: PhotoAnnonce(chemin: annonce.photoUrl),
               ),
               const SizedBox(width: 14),
 
@@ -69,7 +73,9 @@ class AnnonceCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
-                        annonce.estPerdue ? 'Perdu' : 'Trouvé',
+                        annonce.estRestituee
+                            ? 'Restitué'
+                            : (annonce.estPerdue ? 'Perdu' : 'Trouvé'),
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,

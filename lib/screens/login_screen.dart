@@ -40,6 +40,35 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Le compte est enregistré sur ce téléphone (en attendant l'API) :
+  /// on explique comment faire et on rappelle le compte de démonstration.
+  void _motDePasseOublie() {
+    showDialog(
+      context: context,
+      builder: (dialogue) => AlertDialog(
+        title: const Text('Mot de passe oublié'),
+        content: const Text(
+          "Votre compte est enregistré sur ce téléphone. Si vous avez oublié "
+          "votre mot de passe, créez un nouveau compte.\n\n"
+          'Pour tester : demo@ugb.edu.sn / campus123',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogue),
+            child: const Text('Fermer'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogue);
+              Navigator.pushReplacementNamed(context, Routes.inscription);
+            },
+            child: const Text('Créer un compte'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -192,9 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 Align(
                   alignment: Alignment.centerRight,
                   child: GestureDetector(
-                    onTap: () {
-                      // Action mot de passe oublié
-                    },
+                    onTap: _motDePasseOublie,
                     child: const Text(
                       'Mot de passe oublié ?',
                       style: TextStyle(

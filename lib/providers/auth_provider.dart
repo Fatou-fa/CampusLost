@@ -48,6 +48,19 @@ class AuthProvider extends ChangeNotifier {
     return _executer(() => _service.connecter(email, motDePasse));
   }
 
+  /// Retourne true si la modification du profil a réussi.
+  Future<bool> modifierProfil({
+    required String nom,
+    required String prenom,
+    required String telephone,
+  }) {
+    return _executer(() => _service.modifierProfil(
+          nom: nom,
+          prenom: prenom,
+          telephone: telephone,
+        ));
+  }
+
   Future<void> deconnecter() async {
     await _service.deconnecter();
     _utilisateur = null;

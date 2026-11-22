@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Prendre en photo l'objet perdu ou trouvé.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choisir la photo de l'objet dans la galerie.</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>sms</string>
+		<string>https</string>
+	</array>
 </dict>
 </plist>

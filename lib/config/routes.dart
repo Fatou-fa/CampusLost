@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../models/annonce_model.dart';
-import '../screens/accueil_screen.dart';
 import '../screens/bienvenue_screen.dart';
 import '../screens/choix_type_screen.dart';
 import '../screens/detail_annonce_screen.dart';
 import '../screens/formulaire_annonce_screen.dart';
 import '../screens/inscription_screen.dart';
 import '../screens/login_screen.dart';
+import '../screens/modifier_profil_screen.dart';
+import '../screens/principal_screen.dart';
 
 /// Noms des écrans et construction de chaque page.
 ///
@@ -19,10 +20,11 @@ class Routes {
   static const String bienvenue = '/bienvenue';
   static const String connexion = '/connexion';
   static const String inscription = '/inscription';
-  static const String accueil = '/accueil';
+  static const String accueil = '/accueil'; // écran principal à onglets
   static const String choixType = '/publier';
   static const String formulaire = '/publier/formulaire';
   static const String detail = '/annonce';
+  static const String modifierProfil = '/profil/modifier';
 
   /// Appelée par MaterialApp chaque fois qu'on demande un écran par son nom.
   static Route<dynamic> generer(RouteSettings settings) {
@@ -35,18 +37,26 @@ class Routes {
         page = const InscriptionScreen();
         break;
       case accueil:
-        page = const AccueilScreen();
+        // Accueil, Mes annonces, Réclamations et Profil + barre du bas
+        page = const PrincipalScreen();
         break;
       case choixType:
         page = const ChoixTypeScreen();
         break;
       case formulaire:
-        // 'perdu' ou 'trouve', envoyé par l'écran « Publier une annonce »
-        final type = settings.arguments as String? ?? 'trouve';
-        page = FormulaireAnnonceScreen(type: type);
+        // Argument : 'perdu' / 'trouve' (publication) ou une Annonce (modification)
+        final argument = settings.arguments;
+        if (argument is Annonce) {
+          page = FormulaireAnnonceScreen(annonceAModifier: argument);
+        } else {
+          page = FormulaireAnnonceScreen(type: argument as String? ?? 'trouve');
+        }
         break;
       case detail:
         page = DetailAnnonceScreen(annonce: settings.arguments as Annonce);
+        break;
+      case modifierProfil:
+        page = const ModifierProfilScreen();
         break;
       case bienvenue:
       default:

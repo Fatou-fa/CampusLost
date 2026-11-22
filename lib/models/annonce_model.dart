@@ -5,12 +5,13 @@ class Annonce {
   final String description;
   final String type;       // "perdu" ou "trouve"
   final String statut;     // "active" ou "restitue"
-  final String? photoUrl;  // null si pas de photo
-  final String date;       // ex. : "2026-11-15"
+  final String? photoUrl;  // image de l'app (assets/…) ou photo du téléphone
+  final String date;       // ex. : "17/11/2026"
   final String categorie;  // ex. : "Clés"
   final String lieu;       // ex. : "Resto U"
   final int auteurId;
   final String auteurNom;
+  final String auteurTelephone; // pour appeler ou envoyer un SMS
 
   Annonce({
     required this.id,
@@ -24,6 +25,7 @@ class Annonce {
     required this.lieu,
     required this.auteurId,
     required this.auteurNom,
+    this.auteurTelephone = '',
   });
 
   /// Vrai si l'objet a été perdu.
@@ -31,4 +33,23 @@ class Annonce {
 
   /// Vrai si l'objet a déjà été rendu à son propriétaire.
   bool get estRestituee => statut == 'restitue';
+
+  /// Copie de l'annonce avec un autre statut (les champs sont « final » :
+  /// on ne modifie pas l'objet, on en crée un nouveau).
+  Annonce copieAvecStatut(String nouveauStatut) {
+    return Annonce(
+      id: id,
+      titre: titre,
+      description: description,
+      type: type,
+      statut: nouveauStatut,
+      photoUrl: photoUrl,
+      date: date,
+      categorie: categorie,
+      lieu: lieu,
+      auteurId: auteurId,
+      auteurNom: auteurNom,
+      auteurTelephone: auteurTelephone,
+    );
+  }
 }

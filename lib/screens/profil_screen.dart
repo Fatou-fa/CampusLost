@@ -1,28 +1,54 @@
-import 'package:campuslost/screens/login_screen.dart';
-import 'package:campuslost/theme/couleurs.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../config/routes.dart';
+import '../models/annonce_model.dart';
+import '../providers/annonce_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/reclamation_provider.dart';
+import '../theme/couleurs.dart';
+import '../utils/actions.dart';
+
+/// Onglet « Profil » (design de Gilbert) : identité de l'utilisateur,
+/// statistiques et menu (modifier le profil, raccourcis, à propos,
+/// déconnexion).
 class ProfilScreen extends StatelessWidget {
-  const ProfilScreen({super.key});
+  /// Change d'onglet dans l'écran principal (1 = Mes annonces, 2 = Réclamations).
+  final ValueChanged<int> allerA;
+
+  const ProfilScreen({super.key, required this.allerA});
 
   @override
   Widget build(BuildContext context) {
+    final moi = context.watch<AuthProvider>().utilisateur;
+    final annonces = context.watch<AnnonceProvider>();
+    final reclamations = context.watch<ReclamationProvider>();
+
+    final prenom = majuscule(moi?.prenom ?? '');
+    final nom = majuscule(moi?.nom ?? '');
+    final mesAnnonces = moi == null ? <Annonce>[] : annonces.deAuteur(moi.id);
+    final nbRestituees = mesAnnonces.where((a) => a.estRestituee).length;
+    final nbReclamations =
+        reclamations.recues(mesAnnonces.map((a) => a.id).toList()).length;
+
     return Scaffold(
       backgroundColor: Couleurs.fond,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // En-tête marron foncé avec avatar, nom et email
+            // ---------- En-tête : avatar, nom, email ----------
             Container(
               width: double.infinity,
-              color: Couleurs.marronFonce,
+              decoration: const BoxDecoration(
+                color: Couleurs.marronFonce,
+                borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+              ),
               padding: const EdgeInsets.only(bottom: 32),
               child: SafeArea(
                 bottom: false,
                 child: Column(
                   children: [
                     const SizedBox(height: 24),
-                    // Cercle beige avec initiales AN
                     Container(
                       width: 84,
                       height: 84,
@@ -31,9 +57,9 @@ class ProfilScreen extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'AN',
-                        style: TextStyle(
+                      child: Text(
+                        initiales('$prenom $nom'),
+                        style: const TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Couleurs.marronFonce,
@@ -41,47 +67,63 @@ class ProfilScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    // Nom complet
-                    const Text(
-                      'Awa Ndiaye',
-                      style: TextStyle(
+                    Text(
+                      '$prenom $nom'.trim(),
+                      style: const TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                       ),
                     ),
                     const SizedBox(height: 6),
-                    // Adresse email UGB
                     Text(
-                      'awa.ndiaye@ugb.edu.sn',
+                      moi?.email ?? '',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withValues(alpha: 0.85),
                       ),
                     ),
+                    if ((moi?.telephone ?? '').isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        moi!.telephone,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
             ),
 
-            // Contenu principal (Statistiques + Menu)
+            // ---------- Statistiques et menu ----------
             Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  // Ligne des 3 cartes statistiques
                   Row(
                     children: [
-                      Expanded(child: _buildStatCard('3', 'Annonces')),
+                      Expanded(
+                        child: _statistique('${mesAnnonces.length}', 'Annonces',
+                            () => allerA(1)),
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildStatCard('1', 'Restituée')),
+                      Expanded(
+                        child: _statistique('$nbRestituees',
+                            nbRestituees > 1 ? 'Restituées' : 'Restituée', () => allerA(1)),
+                      ),
                       const SizedBox(width: 12),
-                      Expanded(child: _buildStatCard('1', 'Réclamation')),
+                      Expanded(
+                        child: _statistique('$nbReclamations',
+                            nbReclamations > 1 ? 'Réclamations' : 'Réclamation',
+                            () => allerA(2)),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 20),
 
-                  // Carte blanche regroupant toutes les options du menu
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white,
@@ -90,52 +132,36 @@ class ProfilScreen extends StatelessWidget {
                     ),
                     child: Column(
                       children: [
-                        _buildMenuItem(
-                          icon: Icons.edit_outlined,
-                          label: 'Modifier mon profil',
-                          onTap: () {
-                            // Action modifier le profil
-                          },
+                        _ligneMenu(
+                          icone: Icons.edit_outlined,
+                          libelle: 'Modifier mon profil',
+                          onTap: () =>
+                              Navigator.pushNamed(context, Routes.modifierProfil),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
-                        _buildMenuItem(
-                          icon: Icons.list_alt_rounded,
-                          label: 'Mes annonces',
-                          onTap: () {
-                            // Naviguer vers Mes annonces
-                          },
+                        _ligneMenu(
+                          icone: Icons.list_alt_rounded,
+                          libelle: 'Mes annonces',
+                          onTap: () => allerA(1),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
-                        _buildMenuItem(
-                          icon: Icons.notifications_none_rounded,
-                          label: 'Notifications',
-                          onTap: () {
-                            // Ouvrir les notifications
-                          },
+                        _ligneMenu(
+                          icone: Icons.inbox_outlined,
+                          libelle: 'Mes réclamations',
+                          onTap: () => allerA(2),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
-                        _buildMenuItem(
-                          icon: Icons.info_outline_rounded,
-                          label: 'À propos de CampusLost',
-                          onTap: () {
-                            // Afficher À propos
-                          },
+                        _ligneMenu(
+                          icone: Icons.info_outline_rounded,
+                          libelle: 'À propos de CampusLost',
+                          onTap: () => _aPropos(context),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
-                        // Option Se déconnecter en rouge sans flèche à droite
-                        _buildMenuItem(
-                          icon: Icons.logout_rounded,
-                          label: 'Se déconnecter',
+                        _ligneMenu(
+                          icone: Icons.logout_rounded,
+                          libelle: 'Se déconnecter',
                           estDeconnexion: true,
-                          onTap: () {
-                            Navigator.pushAndRemoveUntil(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LoginScreen(),
-                              ),
-                                  (route) => false,
-                            );
-                          },
+                          onTap: () => confirmerDeconnexion(context),
                         ),
                       ],
                     ),
@@ -146,128 +172,36 @@ class ProfilScreen extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
     );
   }
 
-  /// Construit une carte statistique (ex: 3 Annonces)
-  Widget _buildStatCard(String chiffre, String libelle) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
-      decoration: BoxDecoration(
-        color: Colors.white,
+  /// Carte statistique cliquable (ex. : « 3 Annonces »).
+  Widget _statistique(String chiffre, String libelle, VoidCallback onTap) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Couleurs.bordure),
-      ),
-      child: Column(
-        children: [
-          Text(
-            chiffre,
-            style: const TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Couleurs.marronFonce,
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Couleurs.bordure),
           ),
-          const SizedBox(height: 4),
-          Text(
-            libelle,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Couleurs.texteDiscret,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Construit une ligne du menu d'options
-  Widget _buildMenuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    bool estDeconnexion = false,
-  }) {
-    final couleurTexte =
-    estDeconnexion ? const Color(0xFFB3261E) : Couleurs.texte;
-    final couleurIcone =
-    estDeconnexion ? const Color(0xFFB3261E) : Couleurs.marronFonce;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        child: Row(
-          children: [
-            Icon(icon, size: 22, color: couleurIcone),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: couleurTexte,
-                ),
-              ),
-            ),
-            if (!estDeconnexion)
-              const Icon(
-                Icons.chevron_right_rounded,
-                size: 22,
-                color: Couleurs.texteDiscret,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  /// Barre de navigation inférieure avec onglet « Profil » actif
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Couleurs.bordure)),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          child: Column(
             children: [
-              _buildNavItem(Icons.home_outlined, 'Accueil', false),
-              _buildNavItem(Icons.list_alt_rounded, 'Mes annonces', false),
-              // Bouton central rond beige (+)
-              GestureDetector(
-                onTap: () {
-                  // Action publier une annonce
-                },
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: Couleurs.beige,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add,
-                    color: Couleurs.texte,
-                    size: 28,
-                  ),
+              Text(
+                chiffre,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Couleurs.marronFonce,
                 ),
               ),
-              _buildNavItem(Icons.inbox_outlined, 'Réclamations', false),
-              _buildNavItem(Icons.person_outline, 'Profil', true),
+              const SizedBox(height: 4),
+              Text(libelle,
+                  style: const TextStyle(fontSize: 12, color: Couleurs.texteDiscret)),
             ],
           ),
         ),
@@ -275,29 +209,62 @@ class ProfilScreen extends StatelessWidget {
     );
   }
 
-  /// Élément individuel de la barre de navigation
-  Widget _buildNavItem(IconData icon, String label, bool actif) {
-    final couleur = actif ? Couleurs.marron : Couleurs.texteDiscret;
-
-    return GestureDetector(
-        onTap: () {
-          // Navigation entre les écrans
-        },
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+  /// Une ligne du menu ; la déconnexion est en rouge, sans flèche.
+  Widget _ligneMenu({
+    required IconData icone,
+    required String libelle,
+    required VoidCallback onTap,
+    bool estDeconnexion = false,
+  }) {
+    const rouge = Color(0xFFB3261E);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        child: Row(
           children: [
-            Icon(icon, color: couleur, size: 24),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: actif ? FontWeight.bold : FontWeight.w500,
-                color: couleur,
+            Icon(icone, size: 22, color: estDeconnexion ? rouge : Couleurs.marronFonce),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                libelle,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w500,
+                  color: estDeconnexion ? rouge : Couleurs.texte,
+                ),
               ),
             ),
+            if (!estDeconnexion)
+              const Icon(Icons.chevron_right_rounded,
+                  size: 22, color: Couleurs.texteDiscret),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Fenêtre « À propos » fournie par Flutter (avec la liste des licences).
+  void _aPropos(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: 'CampusLost',
+      applicationVersion: '1.0.0',
+      applicationIcon: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.asset('assets/images/icone_app_ugb.png', width: 52),
+      ),
+      children: const [
+        SizedBox(height: 8),
+        Text(
+          'Objets perdus et trouvés sur le campus de '
+          "l'Université Gaston Berger de Saint-Louis.",
+        ),
+        SizedBox(height: 12),
+        Text('Réalisé par Fatou Fall et Gilbert Ngor Thiomby Diouf'),
+        Text('GIT3 — IPSL, cours de développement mobile'),
+      ],
     );
   }
 }

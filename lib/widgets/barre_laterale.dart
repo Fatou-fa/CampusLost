@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../config/routes.dart';
 import '../providers/auth_provider.dart';
 import '../theme/couleurs.dart';
+import '../utils/actions.dart';
 
 /// Barre latérale (Drawer) de l'accueil, ouverte en appuyant sur le logo.
 ///
@@ -130,7 +130,7 @@ class BarreLaterale extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              onTap: () => _confirmerDeconnexion(context),
+              onTap: () => confirmerDeconnexion(context),
             ),
           ),
         ],
@@ -175,37 +175,5 @@ class BarreLaterale extends StatelessWidget {
         ],
       ),
     );
-  }
-
-  /// Demande confirmation, ferme la session puis revient à l'écran Bienvenue.
-  Future<void> _confirmerDeconnexion(BuildContext context) async {
-    // On garde le navigateur et le provider avant les « await » :
-    // la barre latérale peut disparaître pendant l'attente.
-    final navigateur = Navigator.of(context);
-    final auth = context.read<AuthProvider>();
-
-    final confirme = await showDialog<bool>(
-      context: context,
-      builder: (dialogue) => AlertDialog(
-        title: const Text('Se déconnecter ?'),
-        content: const Text(
-            'Vous devrez vous reconnecter pour publier ou contacter un étudiant.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogue, false),
-            child: const Text('Annuler'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(dialogue, true),
-            child: const Text('Se déconnecter'),
-          ),
-        ],
-      ),
-    );
-    if (confirme != true) return;
-
-    await auth.deconnecter();
-    // On vide la pile d'écrans : le bouton retour ne ramène pas à l'accueil
-    navigateur.pushNamedAndRemoveUntil(Routes.bienvenue, (_) => false);
   }
 }

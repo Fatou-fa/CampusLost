@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'config/routes.dart';
 import 'providers/annonce_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/reclamation_provider.dart';
 import 'theme/couleurs.dart';
 
 /// Point d'entrée de CampusLost.
@@ -25,27 +26,30 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider.value(value: auth),
         ChangeNotifierProvider(create: (_) => AnnonceProvider()),
+        ChangeNotifierProvider(create: (_) => ReclamationProvider()),
       ],
-      child: const CampusLostApp(),
+      child: CampusLostApp(dejaConnecte: auth.estConnecte),
     ),
   );
 }
 
 /// Racine de l'application CampusLost.
 class CampusLostApp extends StatelessWidget {
-  const CampusLostApp({super.key});
+  /// Vrai si une session existe déjà sur le téléphone (lu dans main).
+  final bool dejaConnecte;
+
+  const CampusLostApp({super.key, this.dejaConnecte = false});
 
   @override
   Widget build(BuildContext context) {
-    // read : on lit l'état une seule fois, au démarrage
-    final dejaConnecte = context.read<AuthProvider>().estConnecte;
-
     return MaterialApp(
       title: 'CampusLost',
       debugShowCheckedModeBanner: false, // retire le bandeau « DEBUG »
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Couleurs.marron),
         useMaterial3: true,
+        // Messages flottants, au-dessus de la barre du bas
+        snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
       ),
       // Premier écran selon la session, puis navigation par nom (Routes)
       initialRoute: dejaConnecte ? Routes.accueil : Routes.bienvenue,

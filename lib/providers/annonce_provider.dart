@@ -2,15 +2,14 @@ import 'package:flutter/foundation.dart';
 
 import '../models/annonce_model.dart';
 
-/// Liste des annonces partagée par les écrans (accueil, publication, détail).
+/// Liste des annonces partagée par tous les écrans.
 ///
-/// TEMPORAIRE : les annonces sont en mémoire. Quand l'API PHP sera prête,
-/// la liste sera chargée depuis le serveur (ApiConfig.annonces) et
-/// [ajouter] enverra l'annonce au serveur ; les écrans ne changeront pas.
+/// TEMPORAIRE : les annonces sont en mémoire (elles reviennent aux exemples
+/// au redémarrage). Quand l'API PHP sera prête, chaque méthode enverra la
+/// modification au serveur ; les écrans ne changeront pas.
 class AnnonceProvider extends ChangeNotifier {
   /// Catégories de l'application : [libellé, image].
-  /// Liste unique, utilisée par l'accueil ET par le formulaire de
-  /// publication, pour que le filtre retrouve bien les annonces publiées.
+  /// Liste unique, utilisée par l'accueil ET par le formulaire.
   static const List<List<String>> categories = [
     ['Clés', 'assets/images/objets/cles.png'],
     ['Téléphones', 'assets/images/objets/telephone.png'],
@@ -22,7 +21,16 @@ class AnnonceProvider extends ChangeNotifier {
     ['Autres', 'assets/images/objets/autres.png'], // tout ce qui n'entre pas ailleurs
   ];
 
-  // Données d'exemple, en attendant l'API PHP
+  /// Image par défaut d'une catégorie (utilisée quand il n'y a pas de photo).
+  static String imageDe(String categorie) {
+    for (final c in categories) {
+      if (c[0] == categorie) return c[1];
+    }
+    return 'assets/images/objets/autres.png';
+  }
+
+  // Données d'exemple, en attendant l'API PHP.
+  // Les annonces 6 et 7 appartiennent au compte de démonstration (id 99).
   final List<Annonce> _annonces = [
     Annonce(
       id: 1,
@@ -35,8 +43,9 @@ class AnnonceProvider extends ChangeNotifier {
       date: 'Il y a 2 h',
       categorie: 'Papiers',
       lieu: 'Bibliothèque universitaire',
-      auteurId: 1,
+      auteurId: 201,
       auteurNom: 'Awa N.',
+      auteurTelephone: '771234567',
     ),
     Annonce(
       id: 2,
@@ -50,8 +59,9 @@ class AnnonceProvider extends ChangeNotifier {
       date: 'Hier, 12 h 30',
       categorie: 'Clés',
       lieu: 'Resto U',
-      auteurId: 2,
+      auteurId: 202,
       auteurNom: 'Moussa D.',
+      auteurTelephone: '781234567',
     ),
     Annonce(
       id: 3,
@@ -63,8 +73,9 @@ class AnnonceProvider extends ChangeNotifier {
       date: 'Lundi',
       categorie: 'Téléphones',
       lieu: 'Amphithéâtre A',
-      auteurId: 3,
+      auteurId: 203,
       auteurNom: 'Ibrahima S.',
+      auteurTelephone: '761234567',
     ),
     Annonce(
       id: 4,
@@ -76,8 +87,9 @@ class AnnonceProvider extends ChangeNotifier {
       date: 'Lundi',
       categorie: 'Lunettes',
       lieu: 'Salle informatique',
-      auteurId: 2,
+      auteurId: 202,
       auteurNom: 'Moussa D.',
+      auteurTelephone: '781234567',
     ),
     Annonce(
       id: 5,
@@ -89,11 +101,39 @@ class AnnonceProvider extends ChangeNotifier {
       date: 'Dimanche',
       categorie: 'Portefeuilles',
       lieu: 'Terrain de sport',
-      auteurId: 4,
+      auteurId: 204,
       auteurNom: 'Khady F.',
+      auteurTelephone: '701234567',
+    ),
+    Annonce(
+      id: 6,
+      titre: 'Écouteurs sans fil',
+      description: 'Écouteurs blancs dans leur boîtier, trouvés sur un banc devant le pavillon G.',
+      type: 'trouve',
+      statut: 'active',
+      photoUrl: 'assets/images/objets/ecouteurs.png',
+      date: 'Mardi',
+      categorie: 'Audio',
+      lieu: 'Pavillons',
+      auteurId: 99,
+      auteurNom: 'Étudiant D.',
+      auteurTelephone: '770000000',
+    ),
+    Annonce(
+      id: 7,
+      titre: 'Calculatrice',
+      description: 'Calculatrice scientifique oubliée après un examen.',
+      type: 'trouve',
+      statut: 'restitue',
+      photoUrl: 'assets/images/objets/calculatrice.png',
+      date: 'La semaine dernière',
+      categorie: 'Fournitures',
+      lieu: 'Amphithéâtre B',
+      auteurId: 99,
+      auteurNom: 'Étudiant D.',
+      auteurTelephone: '770000000',
     ),
   ];
-
 
   // Texte tapé dans la barre de recherche de l'accueil
   String _recherche = '';
@@ -102,18 +142,52 @@ class AnnonceProvider extends ChangeNotifier {
   String? _categorie;
 
   String get recherche => _recherche;
+  String? get categorie => _categorie;
 
   /// Toutes les annonces, la plus récente en premier.
   List<Annonce> get annonces => List.unmodifiable(_annonces);
 
-  /// Annonces dont le titre contient le texte recherché.
-  String? get categorie => _categorie;
+  /// Annonces de l'accueil : actives (pas encore restituées) et qui
+  /// correspondent à la recherche (titre, lieu ou catégorie) ET à la catégorie.
+  List<Annonce> get resultats {
+    final texte = _recherche.toLowerCase();
+    return _annonces
+        .where((a) => !a.estRestituee)
+        .where((a) =>
+            a.titre.toLowerCase().contains(texte) ||
+            a.lieu.toLowerCase().contains(texte) ||
+            a.categorie.toLowerCase().contains(texte))
+        .where((a) => _categorie == null || a.categorie == _categorie)
+        .toList();
+  }
 
-  /// Annonces qui correspondent à la recherche ET à la catégorie choisie.
-  List<Annonce> get resultats => _annonces
-      .where((a) => a.titre.toLowerCase().contains(_recherche.toLowerCase()))
-      .where((a) => _categorie == null || a.categorie == _categorie)
-      .toList();
+  /// Annonces publiées par un utilisateur (écran « Mes annonces »).
+  List<Annonce> deAuteur(int auteurId) =>
+      _annonces.where((a) => a.auteurId == auteurId).toList();
+
+  /// Retrouve une annonce par son id (null si elle a été supprimée).
+  Annonce? parId(int id) {
+    for (final a in _annonces) {
+      if (a.id == id) return a;
+    }
+    return null;
+  }
+
+  /// Numéro pour la prochaine annonce (en attendant l'id donné par MySQL).
+  int get prochainId {
+    var max = 0;
+    for (final a in _annonces) {
+      if (a.id > max) max = a.id;
+    }
+    return max + 1;
+  }
+
+  // ---------- Recherche et filtre ----------
+
+  void rechercher(String texte) {
+    _recherche = texte;
+    notifyListeners(); // l'accueil se redessine avec les nouveaux résultats
+  }
 
   /// Retire le filtre : toutes les annonces sont de nouveau affichées.
   void afficherTout() {
@@ -127,10 +201,7 @@ class AnnonceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void rechercher(String texte) {
-    _recherche = texte;
-    notifyListeners(); // l'accueil se redessine avec les nouveaux résultats
-  }
+  // ---------- Modifications ----------
 
   /// Ajoute une annonce publiée en tête de liste.
   void ajouter(Annonce annonce) {
@@ -138,6 +209,23 @@ class AnnonceProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Numéro pour la prochaine annonce (en attendant l'id donné par MySQL).
-  int get prochainId => _annonces.length + 1;
+  /// Remplace une annonce existante (même id) par sa version modifiée.
+  void modifier(Annonce annonce) {
+    final index = _annonces.indexWhere((a) => a.id == annonce.id);
+    if (index == -1) return;
+    _annonces[index] = annonce;
+    notifyListeners();
+  }
+
+  /// L'objet a été rendu : l'annonce passe dans « Restituées ».
+  void marquerRestituee(int id) {
+    final annonce = parId(id);
+    if (annonce == null) return;
+    modifier(annonce.copieAvecStatut('restitue'));
+  }
+
+  void supprimer(int id) {
+    _annonces.removeWhere((a) => a.id == id);
+    notifyListeners();
+  }
 }

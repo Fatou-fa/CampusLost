@@ -1,6 +1,19 @@
-import 'package:campuslost/theme/couleurs.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../config/routes.dart';
+import '../models/reclamation_model.dart';
+import '../providers/annonce_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/reclamation_provider.dart';
+import '../theme/couleurs.dart';
+import '../utils/actions.dart';
+
+/// Onglet « Réclamations » (design de Gilbert).
+///
+///  - Reçues : les personnes qui disent être propriétaires d'un objet que
+///    j'ai publié. Je compare le détail donné, puis j'accepte ou je refuse.
+///  - Envoyées : mes propres demandes et leur réponse.
 class ReclamationsScreen extends StatefulWidget {
   const ReclamationsScreen({super.key});
 
@@ -9,28 +22,28 @@ class ReclamationsScreen extends StatefulWidget {
 }
 
 class _ReclamationsScreenState extends State<ReclamationsScreen> {
-  // Données de démonstration correspondant à la maquette
-  final List<Map<String, dynamic>> _reclamations = [
-    {
-      'initiales': 'AN',
-      'nom': 'Awa N.',
-      'sousTitre': 'il y a 20 min · Clé USB',
-      'statut': 'EN ATTENTE',
-      'message': '« Bonjour, je pense que c\'est ma clé USB, elle contient mon mémoire. »',
-      'detail': 'une étiquette « AN » au dos',
-    },
-    {
-      'initiales': 'IS',
-      'nom': 'Ibrahima S.',
-      'sousTitre': 'hier · Trousseau de clés',
-      'statut': 'ACCEPTÉE',
-      'message': null,
-      'detail': null,
-    },
-  ];
+  int _ongletActif = 0; // 0 = Reçues, 1 = Envoyées
+
+  // Couleurs des statuts
+  static const vertFond = Color(0xFFE3F3EA);
+  static const vertTexte = Color(0xFF1F6E43);
+  static const rougeFond = Color(0xFFFBEAE5);
+  static const rougeTexte = Color(0xFFB3261E);
 
   @override
   Widget build(BuildContext context) {
+    final moi = context.watch<AuthProvider>().utilisateur;
+    final annonces = context.watch<AnnonceProvider>();
+    final provider = context.watch<ReclamationProvider>();
+
+    final mesIds = moi == null
+        ? <int>[]
+        : annonces.deAuteur(moi.id).map((a) => a.id).toList();
+    final recues = provider.recues(mesIds);
+    final envoyees = moi == null ? <Reclamation>[] : provider.envoyees(moi.id);
+    final affichees = _ongletActif == 0 ? recues : envoyees;
+    final enAttente = recues.where((r) => r.estEnAttente).length;
+
     return Scaffold(
       backgroundColor: Couleurs.fond,
       body: SafeArea(
@@ -39,7 +52,6 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Titre principal
               const Text(
                 'Réclamations',
                 style: TextStyle(
@@ -49,38 +61,128 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              // Sous-titre descriptif
-              const Text(
-                'Les demandes reçues sur les objets que vous avez trouvés.',
-                style: TextStyle(
+              Text(
+                _ongletActif == 0
+                    ? 'Les demandes reçues sur les objets que vous avez publiés.'
+                    : 'Les objets que vous avez réclamés.',
+                style: const TextStyle(
                   fontSize: 14,
                   color: Couleurs.texteDiscret,
                   height: 1.4,
                 ),
               ),
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
 
-              // Liste des cartes de réclamation
-              Expanded(
-                child: ListView.separated(
-                  itemCount: _reclamations.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 16),
-                  itemBuilder: (context, index) {
-                    return _buildCarteReclamation(_reclamations[index], index);
-                  },
+              // Sélecteur Reçues / Envoyées
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: Couleurs.beigeTrouve,
+                  borderRadius: BorderRadius.circular(14),
                 ),
+                child: Row(
+                  children: [
+                    _onglet(0, enAttente > 0
+                        ? 'Reçues ($enAttente à traiter)'
+                        : 'Reçues (${recues.length})'),
+                    _onglet(1, 'Envoyées (${envoyees.length})'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              Expanded(
+                child: affichees.isEmpty
+                    ? _listeVide()
+                    : ListView.separated(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        itemCount: affichees.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) =>
+                            _carte(affichees[index], annonces,
+                            recue: _ongletActif == 0),
+                      ),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: _buildBottomNavBar(),
     );
   }
 
-  /// Construit une carte de réclamation (EN ATTENTE ou ACCEPTÉE)
-  Widget _buildCarteReclamation(Map<String, dynamic> item, int index) {
-    final estEnAttente = item['statut'] == 'EN ATTENTE';
+  Widget _onglet(int index, String titre) {
+    final estActif = _ongletActif == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _ongletActif = index),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: estActif ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            titre,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: estActif ? FontWeight.bold : FontWeight.w500,
+              color: estActif ? Couleurs.marronFonce : Couleurs.texteDiscret,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _listeVide() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.inbox_outlined, size: 56, color: Couleurs.beige),
+          const SizedBox(height: 12),
+          Text(
+            _ongletActif == 0
+                ? 'Aucune réclamation reçue.\nElles arrivent ici quand quelqu\'un '
+                    'reconnaît un objet que vous avez trouvé.'
+                : "Vous n'avez rien réclamé.\nOuvrez une annonce « Trouvé » et "
+                    "touchez « C'est à moi ».",
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Couleurs.texteDiscret, height: 1.4),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Carte d'une réclamation. [recue] : vrai pour l'onglet « Reçues ».
+  Widget _carte(Reclamation r, AnnonceProvider annonces,
+      {required bool recue}) {
+    // Badge selon le statut
+    final String badge;
+    final Color fondBadge;
+    final Color texteBadge;
+    if (r.estAcceptee) {
+      badge = 'ACCEPTÉE';
+      fondBadge = vertFond;
+      texteBadge = vertTexte;
+    } else if (r.estRefusee) {
+      badge = 'REFUSÉE';
+      fondBadge = rougeFond;
+      texteBadge = rougeTexte;
+    } else {
+      badge = 'EN ATTENTE';
+      fondBadge = Couleurs.beigeClair;
+      texteBadge = Couleurs.marron;
+    }
+
+    // Reçue : on voit le demandeur. Envoyée : on voit l'auteur de l'annonce.
+    // (provider déjà lu dans build : context.read est interdit pendant build)
+    final annonce = annonces.parId(r.annonceId);
+    final nom = recue ? r.demandeurNom : (annonce?.auteurNom ?? 'Annonce supprimée');
+    final telephone = recue ? r.demandeurTelephone : (annonce?.auteurTelephone ?? '');
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -92,288 +194,204 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-      // En-tête : Avatar + Nom/Date + Badge de statut
-      Row(
-      children: [
-      // Cercle d'initiales
-      Container(
-      width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          color: estEnAttente ? Couleurs.beige : Couleurs.beigeTrouve,
-          shape: BoxShape.circle,
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          item['initiales'] as String,
-          style: const TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.bold,
-            color: Couleurs.texte,
-          ),
-        ),
-      ),
-      const SizedBox(width: 12),
-      // Nom et objet concerné
-      Expanded(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              item['nom'] as String,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Couleurs.texte,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              item['sousTitre'] as String,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Couleurs.texteDiscret,
-              ),
-            ),
-          ],
-        ),
-      ),
-      // Badge de statut (EN ATTENTE en beige / ACCEPTÉE en vert doux)
-      Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 4,
-        ),
-        decoration: BoxDecoration(
-          color: estEnAttente
-              ? Couleurs.beigeClair
-              : const Color(0xFFE3F3EA),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          item['statut'] as String,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 0.4,
-            color: estEnAttente
-                ? Couleurs.marron
-                : const Color(0xFF1F6E43),
-          ),
-        ),
-      ),
-      ],
-    ),
-
-    // Contenu détaillé si la demande est EN ATTENTE
-    if (estEnAttente) ...[
-    if (item['message'] != null) ...[
-    const SizedBox(height: 14),
-    Text(
-    item['message'] as String,
-    style: const TextStyle(
-    fontSize: 14,
-    color: Couleurs.texte,
-    height: 1.4,
-    ),
-    ),
-    ],
-    if (item['detail'] != null) ...[
-    const SizedBox(height: 12),
-    // Encadré beige « Détail donné : ... »
-    Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(
-    horizontal: 12,
-    vertical: 10,
-    ),
-    decoration: BoxDecoration(
-    color: Couleurs.fond,
-    borderRadius: BorderRadius.circular(10),
-    ),
-    child: RichText(
-    text: TextSpan(
-    style: const TextStyle(
-    fontSize: 13,
-    color: Couleurs.texte,
-    ),
-    children: [
-    const TextSpan(
-    text: 'Détail donné : ',
-    style: TextStyle(fontWeight: FontWeight.bold),
-    ),
-    TextSpan(text: item['detail'] as String),
-    ],
-    ),
-    ),
-    ),
-    ],
-    const SizedBox(height: 16),
-    // Boutons Refuser et Accepter côte à côte
-    Row(
-    children: [
-    Expanded(
-    child: SizedBox(
-    height: 44,
-    child: OutlinedButton.icon(
-    onPressed: () {
-    setState(() {
-    _reclamations.removeAt(index);
-    });
-    },
-    style: OutlinedButton.styleFrom(
-    foregroundColor: Couleurs.texte,
-    side: const BorderSide(color: Couleurs.bordure),
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(12),
-    ),
-    ),
-    icon: const Icon(Icons.close, size: 18),
-    label: const Text(
-    'Refuser',
-    style: TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    ),
-    ),
-    ),
-    ),
-    ),
-    const SizedBox(width: 12),
-    Expanded(
-    child: SizedBox(
-    height: 44,
-    child: FilledButton.icon(
-    onPressed: () {
-    setState(() {
-    _reclamations[index]['statut'] = 'ACCEPTÉE';
-    });
-    },
-    style: FilledButton.styleFrom(
-    backgroundColor: Couleurs.marron,
-    foregroundColor: Colors.white,
-    shape: RoundedRectangleBorder(
-    borderRadius: BorderRadius.circular(12),
-    ),
-    ),
-    icon: const Icon(Icons.check, size: 18),
-    label: const Text(
-    'Accepter',
-    style: TextStyle(
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    ),
-    ),
-    ),
-    ),
-    ),
-    ],
-    ),
-    ] else ...[
-    // Lien d'action si la demande est ACCEPTÉE
-    const SizedBox(height: 14),
-    GestureDetector(
-    onTap: () {
-    // Action ouvrir le contact ou la messagerie
-    },
-    child: const Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-    Icon(
-    Icons.chat_bubble_outline_rounded,
-      size: 16,
-      color: Couleurs.marron,
-    ),
-      SizedBox(width: 6),
-      Text(
-        'Contacter pour la remise',
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: Couleurs.marron,
-          decoration: TextDecoration.underline,
-          decorationColor: Couleurs.marron,
-        ),
-      ),
-    ],
-    ),
-    ),
-    ],
-        ],
-      ),
-    );
-  }
-  /// Barre de navigation du bas avec onglet « Réclamations » actif
-  Widget _buildBottomNavBar() {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Couleurs.bordure)),
-      ),
-      child: SafeArea(
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // En-tête : initiales, nom, objet et badge de statut
+          Row(
             children: [
-              _buildNavItem(Icons.home_outlined, 'Accueil', false),
-              _buildNavItem(Icons.list_alt_rounded, 'Mes annonces', false),
-// Bouton central rond beige (+)
-              GestureDetector(
-                onTap: () {
-// Action publier une annonce
-                },
-                child: Container(
-                  width: 52,
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: Couleurs.beige,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.add,
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: r.estEnAttente ? Couleurs.beige : Couleurs.beigeTrouve,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  initiales(nom),
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
                     color: Couleurs.texte,
-                    size: 28,
                   ),
                 ),
               ),
-              _buildNavItem(Icons.inbox_outlined, 'Réclamations', true),
-              _buildNavItem(Icons.person_outline, 'Profil', false),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      nom,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Couleurs.texte,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${r.date} · ${r.annonceTitre}',
+                      style: const TextStyle(
+                          fontSize: 12, color: Couleurs.texteDiscret),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: fondBadge,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.4,
+                    color: texteBadge,
+                  ),
+                ),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-  /// Élément individuel de la barre de navigation
-  Widget _buildNavItem(IconData icon, String label, bool actif) {
-    final couleur = actif ? Couleurs.marron : Couleurs.texteDiscret;
-    return GestureDetector(
-      onTap: () {
-// Navigation entre les écrans
-      },
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: couleur, size: 24),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: actif ? FontWeight.bold : FontWeight.w500,
-              color: couleur,
+
+          // Message du demandeur
+          if (r.message.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            Text(
+              '« ${r.message} »',
+              style: const TextStyle(fontSize: 14, color: Couleurs.texte, height: 1.4),
             ),
-          ),
+          ],
+
+          // Détail de preuve (visible seulement par celui qui a publié)
+          if (recue && r.detail.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Couleurs.fond,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text.rich(
+                TextSpan(
+                  style: const TextStyle(fontSize: 13, color: Couleurs.texte),
+                  children: [
+                    const TextSpan(
+                      text: 'Détail donné : ',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    TextSpan(text: r.detail),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 16),
+
+          // Boutons selon la situation
+          if (recue && r.estEnAttente)
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _refuser(r),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Couleurs.texte,
+                      side: const BorderSide(color: Couleurs.bordure),
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.close, size: 18),
+                    label: const Text('Refuser'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _accepter(r),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Couleurs.marron,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size.fromHeight(44),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(Icons.check, size: 18),
+                    label: const Text('Accepter'),
+                  ),
+                ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                // Voir l'annonce concernée
+                if (annonce != null)
+                  TextButton.icon(
+                    onPressed: () => Navigator.pushNamed(context, Routes.detail,
+                        arguments: annonce),
+                    style: TextButton.styleFrom(foregroundColor: Couleurs.marron),
+                    icon: const Icon(Icons.visibility_outlined, size: 18),
+                    label: const Text("Voir l'annonce"),
+                  ),
+                const Spacer(),
+                // Une fois acceptée : on se contacte pour la remise de l'objet
+                if (r.estAcceptee && telephone.isNotEmpty) ...[
+                  IconButton.filledTonal(
+                    tooltip: 'Appeler',
+                    onPressed: () => appeler(context, telephone),
+                    icon: const Icon(Icons.phone_outlined),
+                  ),
+                  IconButton.filledTonal(
+                    tooltip: 'Message',
+                    onPressed: () => envoyerMessage(
+                      context,
+                      telephone,
+                      'Bonjour, je vous contacte via CampusLost pour « ${r.annonceTitre} ».',
+                    ),
+                    icon: const Icon(Icons.chat_outlined),
+                  ),
+                ],
+              ],
+            ),
         ],
       ),
     );
+  }
+
+  Future<void> _accepter(Reclamation r) async {
+    final reclamations = context.read<ReclamationProvider>();
+    final annonces = context.read<AnnonceProvider>();
+    final messager = ScaffoldMessenger.of(context);
+    final ok = await confirmer(
+      context,
+      titre: 'Accepter la réclamation ?',
+      message: '${r.demandeurNom} sera reconnu(e) comme propriétaire de '
+          '« ${r.annonceTitre} ». L\'annonce passera dans « Restituées » '
+          'et les autres demandes seront refusées.',
+      action: 'Accepter',
+    );
+    if (!ok) return;
+    reclamations.accepter(r.id);
+    annonces.marquerRestituee(r.annonceId);
+    messager.showSnackBar(SnackBar(
+      content: Text('Contactez ${r.demandeurNom} pour lui remettre l\'objet'),
+    ));
+  }
+
+  Future<void> _refuser(Reclamation r) async {
+    final reclamations = context.read<ReclamationProvider>();
+    final ok = await confirmer(
+      context,
+      titre: 'Refuser la réclamation ?',
+      message: 'Le détail donné par ${r.demandeurNom} ne correspond pas à l\'objet ?',
+      action: 'Refuser',
+      danger: true,
+    );
+    if (ok) reclamations.refuser(r.id);
   }
 }

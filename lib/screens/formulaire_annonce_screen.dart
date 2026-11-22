@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../models/annonce_model.dart';
 import '../providers/annonce_provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/couleurs.dart';
+import '../utils/actions.dart';
+import '../widgets/photo_annonce.dart';
 
-/// Écran 6 : formulaire de publication d'une annonce.
+/// Écran 6 : publication ou modification d'une annonce.
 ///
-/// Le même écran sert pour un objet perdu et pour un objet trouvé :
-/// seuls le titre et quelques champs changent selon [type].
-/// À la publication, l'annonce est ajoutée à [AnnonceProvider] et
-/// l'utilisateur revient à l'accueil, où elle apparaît en tête de liste.
+/// - Publication : on reçoit le [type] ('perdu' ou 'trouve').
+/// - Modification : on reçoit l'[annonceAModifier] ; les champs sont
+///   pré-remplis et le bouton devient « Enregistrer ».
 class FormulaireAnnonceScreen extends StatefulWidget {
-  /// 'perdu' ou 'trouve'
   final String type;
+  final Annonce? annonceAModifier;
 
-  const FormulaireAnnonceScreen({super.key, this.type = 'trouve'});
+  const FormulaireAnnonceScreen({
+    super.key,
+    this.type = 'trouve',
+    this.annonceAModifier,
+  });
 
   @override
   State<FormulaireAnnonceScreen> createState() =>
@@ -24,7 +30,6 @@ class FormulaireAnnonceScreen extends StatefulWidget {
 }
 
 class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
-  // Listes fixes, en attendant de les charger depuis la base de données
   // Mêmes catégories que l'accueil (sinon le filtre ne les trouverait pas)
   static final categories =
       AnnonceProvider.categories.map((c) => c[0]).toList();
@@ -34,23 +39,49 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
     'Amphithéâtres',
     'Pavillons',
     'Salle informatique',
+    'Terrain de sport',
     'Autre',
   ];
   static const emplacements = ['Avec moi', 'Déposé à la scolarité'];
+  static const _marqueEmplacement = "\n\nL'objet est : ";
 
   final _formKey = GlobalKey<FormState>();
-
-  // Champs de texte
   final _titre = TextEditingController();
   final _date = TextEditingController(text: "Aujourd'hui");
   final _description = TextEditingController();
 
-  // Valeurs choisies dans les listes déroulantes (première par défaut)
   String _categorie = categories.first;
   String _lieu = lieux.first;
   String _emplacement = emplacements.first;
+  String? _photo; // chemin de la photo choisie (null = image de la catégorie)
 
-  bool get _estTrouve => widget.type == 'trouve';
+  bool get _modification => widget.annonceAModifier != null;
+  String get _type => widget.annonceAModifier?.type ?? widget.type;
+  bool get _estTrouve => _type == 'trouve';
+
+  @override
+  void initState() {
+    super.initState();
+    final a = widget.annonceAModifier;
+    if (a == null) return;
+
+    // Pré-remplissage pour une modification
+    _titre.text = a.titre;
+    _date.text = a.date;
+    if (categories.contains(a.categorie)) _categorie = a.categorie;
+    if (lieux.contains(a.lieu)) _lieu = a.lieu;
+    // La photo n'est gardée que si c'est une vraie photo (pas l'image de catégorie)
+    if (a.photoUrl != null && !a.photoUrl!.startsWith('assets/')) {
+      _photo = a.photoUrl;
+    }
+    // La description peut contenir « L'objet est : … » ajouté à la publication
+    final morceaux = a.description.split(_marqueEmplacement);
+    _description.text = morceaux.first;
+    if (morceaux.length > 1) {
+      final e = morceaux[1].replaceAll('.', '');
+      if (emplacements.contains(e)) _emplacement = e;
+    }
+  }
 
   @override
   void dispose() {
@@ -60,39 +91,120 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
     super.dispose();
   }
 
-  /// Vérifie le formulaire, crée l'annonce puis revient à l'accueil.
+  // ---------- Photo ----------
+
+  /// Propose l'appareil photo ou la galerie, puis garde le chemin du fichier.
+  Future<void> _choisirPhoto() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Couleurs.fond,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (feuille) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined, color: Couleurs.marron),
+              title: const Text('Prendre une photo'),
+              onTap: () => Navigator.pop(feuille, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined, color: Couleurs.marron),
+              title: const Text('Choisir dans la galerie'),
+              onTap: () => Navigator.pop(feuille, ImageSource.gallery),
+            ),
+            if (_photo != null)
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Color(0xFFB3261E)),
+                title: const Text('Retirer la photo'),
+                onTap: () {
+                  Navigator.pop(feuille);
+                  setState(() => _photo = null);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (source == null) return;
+
+    try {
+      // imageQuality et maxWidth : photo plus légère, plus rapide à afficher
+      final fichier = await ImagePicker()
+          .pickImage(source: source, imageQuality: 70, maxWidth: 1200);
+      if (fichier != null && mounted) setState(() => _photo = fichier.path);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Impossible d'ouvrir l'appareil photo ou la galerie")),
+      );
+    }
+  }
+
+  // ---------- Date ----------
+
+  /// Calendrier : la date choisie s'écrit dans le champ (jj/mm/aaaa).
+  Future<void> _choisirDate() async {
+    final maintenant = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: maintenant,
+      firstDate: DateTime(maintenant.year - 1),
+      lastDate: maintenant, // pas de date dans le futur
+      helpText: _estTrouve ? 'Trouvé le' : 'Perdu le',
+    );
+    if (date == null) return;
+    final jour = date.day.toString().padLeft(2, '0');
+    final mois = date.month.toString().padLeft(2, '0');
+    setState(() => _date.text = '$jour/$mois/${date.year}');
+  }
+
+  // ---------- Enregistrement ----------
+
   void _publier() {
     if (!_formKey.currentState!.validate()) return;
 
     final annonces = context.read<AnnonceProvider>();
     final auteur = context.read<AuthProvider>().utilisateur;
+    final messager = ScaffoldMessenger.of(context);
 
-    // Pour un objet trouvé, on précise où il se trouve maintenant
     var description = _description.text.trim();
-    if (_estTrouve) description += '\n\nL\'objet est : $_emplacement.';
+    if (_estTrouve) description += '$_marqueEmplacement$_emplacement.';
 
-    annonces.ajouter(Annonce(
-      id: annonces.prochainId,
+    final ancienne = widget.annonceAModifier;
+    final annonce = Annonce(
+      id: ancienne?.id ?? annonces.prochainId,
       titre: _titre.text.trim(),
       description: description,
-      type: widget.type,
-      statut: 'active',
-      photoUrl: null, // la photo sera gérée plus tard (appareil photo)
+      type: _type,
+      statut: ancienne?.statut ?? 'active',
+      // Pas de photo : on montre l'image de la catégorie
+      photoUrl: _photo ?? AnnonceProvider.imageDe(_categorie),
       date: _date.text.trim(),
       categorie: _categorie,
       lieu: _lieu,
-      auteurId: auteur?.id ?? 0,
-      auteurNom: auteur == null
-          ? 'Anonyme'
-          : '${auteur.prenom} ${auteur.nom.isEmpty ? '' : '${auteur.nom[0]}.'}',
-    ));
-
-    // On récupère le messager avant de quitter l'écran
-    final messager = ScaffoldMessenger.of(context);
-    Navigator.pop(context); // retour à l'accueil
-    messager.showSnackBar(
-      const SnackBar(content: Text('Annonce publiée')),
+      auteurId: ancienne?.auteurId ?? auteur?.id ?? 0,
+      auteurNom: ancienne?.auteurNom ??
+          (auteur == null
+              ? 'Anonyme'
+              : '${majuscule(auteur.prenom)} ${auteur.nom.isEmpty ? '' : '${auteur.nom[0].toUpperCase()}.'}'.trim()),
+      auteurTelephone: ancienne?.auteurTelephone ?? auteur?.telephone ?? '',
     );
+
+    if (_modification) {
+      annonces.modifier(annonce);
+    } else {
+      annonces.ajouter(annonce);
+    }
+
+    Navigator.pop(context);
+    messager.showSnackBar(SnackBar(
+      content: Text(_modification ? 'Annonce modifiée' : 'Annonce publiée'),
+    ));
   }
 
   @override
@@ -102,7 +214,9 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
       appBar: AppBar(
         backgroundColor: Couleurs.fond,
         title: Text(
-          _estTrouve ? 'Objet trouvé' : 'Objet perdu',
+          _modification
+              ? "Modifier l'annonce"
+              : (_estTrouve ? 'Objet trouvé' : 'Objet perdu'),
           style: const TextStyle(
             color: Couleurs.marronFonce,
             fontWeight: FontWeight.bold,
@@ -117,22 +231,7 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // ---------- Photo (facultative) ----------
-              OutlinedButton.icon(
-                onPressed: () {
-                  // Plus tard : ouvrir l'appareil photo ou la galerie
-                },
-                icon: const Icon(Icons.photo_camera_outlined),
-                label: const Text('Ajouter une photo (facultatif)'),
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size.fromHeight(110),
-                  foregroundColor: Couleurs.marron,
-                  backgroundColor: Couleurs.beigeClair,
-                  side: const BorderSide(color: Couleurs.marron),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
+              _zonePhoto(),
               const SizedBox(height: 16),
 
               // ---------- Champs ----------
@@ -145,7 +244,17 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
               _liste(_estTrouve ? 'Lieu de découverte' : 'Lieu de la perte',
                   lieux, _lieu, (v) => setState(() => _lieu = v)),
               const SizedBox(height: 14),
-              _champ(_date, 'Date', "Aujourd'hui"),
+
+              // Date : appui = calendrier (pas de saisie au clavier)
+              TextFormField(
+                controller: _date,
+                readOnly: true,
+                onTap: _choisirDate,
+                decoration: _style('Date', "Aujourd'hui").copyWith(
+                  suffixIcon: const Icon(Icons.calendar_today_outlined,
+                      color: Couleurs.marron),
+                ),
+              ),
               const SizedBox(height: 14),
 
               // Uniquement pour un objet trouvé : où est-il maintenant ?
@@ -156,7 +265,7 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
               ],
 
               _champ(_description, 'Description', 'Couleur, forme, porte-clés…',
-                  lignes: 3),
+                  lignes: 3, obligatoire: false),
               const SizedBox(height: 14),
 
               // ---------- Conseil (objet trouvé seulement) ----------
@@ -170,8 +279,7 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
                   child: const Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(Icons.info_outline,
-                          color: Couleurs.marron, size: 20),
+                      Icon(Icons.info_outline, color: Couleurs.marron, size: 20),
                       SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -195,13 +303,59 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                child: const Text(
-                  "Publier l'annonce",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                child: Text(
+                  _modification ? 'Enregistrer' : "Publier l'annonce",
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// Zone photo : bouton « Ajouter » ou aperçu de la photo choisie.
+  Widget _zonePhoto() {
+    return Material(
+      color: Couleurs.beigeClair,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: _choisirPhoto,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: _photo == null ? 110 : 200,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Couleurs.marron),
+          ),
+          child: _photo == null
+              ? const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_camera_outlined, color: Couleurs.marron, size: 30),
+                    SizedBox(height: 6),
+                    Text('Ajouter une photo (facultatif)',
+                        style: TextStyle(color: Couleurs.marron, fontWeight: FontWeight.w600)),
+                  ],
+                )
+              : Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(15),
+                      child: PhotoAnnonce(chemin: _photo, ajustement: BoxFit.cover),
+                    ),
+                    const Positioned(
+                      right: 10,
+                      bottom: 10,
+                      child: CircleAvatar(
+                        backgroundColor: Colors.white,
+                        child: Icon(Icons.edit, color: Couleurs.marron, size: 20),
+                      ),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
@@ -218,16 +372,17 @@ class _FormulaireAnnonceScreenState extends State<FormulaireAnnonceScreen> {
     );
   }
 
-  /// Champ de texte obligatoire ; [lignes] > 1 pour une zone plus haute.
-  Widget _champ(TextEditingController controleur, String libelle,
-      String exemple,
-      {int lignes = 1}) {
+  /// Champ de texte ; [lignes] > 1 pour une zone plus haute.
+  Widget _champ(TextEditingController controleur, String libelle, String exemple,
+      {int lignes = 1, bool obligatoire = true}) {
     return TextFormField(
       controller: controleur,
       maxLines: lignes,
+      textCapitalization: TextCapitalization.sentences,
       decoration: _style(libelle, exemple),
-      validator: (valeur) =>
-          (valeur == null || valeur.trim().isEmpty) ? 'Obligatoire' : null,
+      validator: (valeur) => obligatoire && (valeur == null || valeur.trim().isEmpty)
+          ? 'Obligatoire'
+          : null,
     );
   }
 

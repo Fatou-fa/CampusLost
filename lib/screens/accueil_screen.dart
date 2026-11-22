@@ -11,8 +11,8 @@ import '../widgets/barre_laterale.dart';
 /// Écran d'accueil : recherche, catégories et annonces récentes.
 ///
 /// Les annonces viennent de [AnnonceProvider] et le prénom affiché de
-/// [AuthProvider]. Navigation : bouton « Publier », appui sur une annonce
-/// (détail) et appui sur le logo (barre latérale : profil, déconnexion).
+/// [AuthProvider]. Navigation : appui sur une annonce (détail) et appui sur
+/// le logo (barre latérale). Le bouton « + » est dans la barre du bas.
 class AccueilScreen extends StatelessWidget {
   const AccueilScreen({super.key});
 
@@ -76,18 +76,10 @@ class AccueilScreen extends StatelessWidget {
                       arguments: annonce),
                 ),
               ),
-          const SizedBox(height: 90), // place pour le bouton « Publier »
+          const SizedBox(height: 24),
         ],
       ),
 
-      // Bouton pour publier une annonce (perdue ou trouvée)
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.pushNamed(context, Routes.choixType),
-        backgroundColor: Couleurs.marron,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text('Publier'),
-      ),
     );
   }
 
