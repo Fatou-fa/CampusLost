@@ -1,14 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/utilisateur_model.dart';
-import '../services/auth_service.dart';
+import '../repositories/auth_repository.dart';
 
-/// Utilisateur lu sur le téléphone au démarrage (dans main.dart).
+/// Utilisateur trouvé au démarrage (dans main.dart, après Firebase.initializeApp).
 /// Il est fourni à Riverpod avec `overrideWithValue` dans le ProviderScope.
 final utilisateurInitialProvider = Provider<Utilisateur?>((ref) => null);
-
-/// Service qui gère le compte (stockage local, plus tard l'API PHP).
-final authServiceProvider = Provider<AuthService>((ref) => AuthService());
 
 /// Utilisateur connecté (null = personne n'est connecté).
 ///
@@ -20,7 +17,7 @@ final authProvider =
 /// Les actions sur la session. Chaque action retourne null si tout s'est
 /// bien passé, sinon le message d'erreur à afficher.
 class AuthNotifier extends Notifier<Utilisateur?> {
-  AuthService get _service => ref.read(authServiceProvider);
+  AuthRepository get _repo => ref.read(authRepositoryProvider);
 
   /// Valeur de départ : la session trouvée au lancement de l'application.
   @override
@@ -33,7 +30,7 @@ class AuthNotifier extends Notifier<Utilisateur?> {
     required String telephone,
     required String motDePasse,
   }) {
-    return _executer(() => _service.inscrire(
+    return _executer(() => _repo.inscrire(
           nom: nom,
           prenom: prenom,
           email: email,
@@ -43,7 +40,7 @@ class AuthNotifier extends Notifier<Utilisateur?> {
   }
 
   Future<String?> connecter(String email, String motDePasse) {
-    return _executer(() => _service.connecter(email, motDePasse));
+    return _executer(() => _repo.connecter(email, motDePasse));
   }
 
   Future<String?> modifierProfil({
@@ -51,7 +48,7 @@ class AuthNotifier extends Notifier<Utilisateur?> {
     required String prenom,
     required String telephone,
   }) {
-    return _executer(() => _service.modifierProfil(
+    return _executer(() => _repo.modifierProfil(
           nom: nom,
           prenom: prenom,
           telephone: telephone,
@@ -59,7 +56,7 @@ class AuthNotifier extends Notifier<Utilisateur?> {
   }
 
   Future<void> deconnecter() async {
-    await _service.deconnecter();
+    await _repo.deconnecter();
     state = null; // tous les écrans qui « watch » authProvider se redessinent
   }
 

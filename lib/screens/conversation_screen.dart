@@ -15,7 +15,7 @@ import '../utils/actions.dart';
 /// Les deux moyens de contact restent au choix de l'utilisateur :
 /// écrire ici, ou appeler (le numéro n'est jamais affiché).
 class ConversationScreen extends ConsumerStatefulWidget {
-  final int conversationId;
+  final String conversationId;
   final String texteInitial; // message pré-rempli (ex. « Je l'ai trouvé »)
 
   const ConversationScreen({
@@ -286,7 +286,7 @@ class _ConversationScreenState extends ConsumerState<ConversationScreen> {
     );
   }
 
-  Future<void> _menu(String choix, Conversation c, int moiId) async {
+  Future<void> _menu(String choix, Conversation c, String moiId) async {
     final conversations = ref.read(conversationsProvider.notifier);
     switch (choix) {
       case 'annonce':

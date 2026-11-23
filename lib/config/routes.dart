@@ -40,11 +40,11 @@ class Routes {
   static const modifierProfil = '/modifier-profil';
   static const messages = '/messages';
   static String formulaire(String type) => '/formulaire/$type'; // perdu / trouve
-  static String detail(int id) => '/annonce/$id';
-  static String modifierAnnonce(int id) => '/modifier-annonce/$id';
+  static String detail(String id) => '/annonce/$id';
+  static String modifierAnnonce(String id) => '/modifier-annonce/$id';
 
   /// Conversation ; [texte] pré-remplit la zone de saisie (?texte=…).
-  static String conversation(int id, {String texte = ''}) => texte.isEmpty
+  static String conversation(String id, {String texte = ''}) => texte.isEmpty
       ? '/conversation/$id'
       : '/conversation/$id?texte=${Uri.encodeComponent(texte)}';
 
@@ -105,12 +105,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/modifier-annonce/:id',
         builder: (_, state) => FormulaireAnnonceScreen(
-            annonceId: int.parse(state.pathParameters['id']!)),
+            annonceId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/annonce/:id',
         builder: (_, state) =>
-            DetailAnnonceScreen(annonceId: int.parse(state.pathParameters['id']!)),
+            DetailAnnonceScreen(annonceId: state.pathParameters['id']!),
       ),
       GoRoute(
           path: Routes.modifierProfil,
@@ -119,7 +119,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/conversation/:id',
         builder: (_, state) => ConversationScreen(
-          conversationId: int.parse(state.pathParameters['id']!),
+          conversationId: state.pathParameters['id']!,
           // Paramètre facultatif dans l'adresse : ?texte=…
           texteInitial: state.uri.queryParameters['texte'] ?? '',
         ),

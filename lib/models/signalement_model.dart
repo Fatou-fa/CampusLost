@@ -1,10 +1,11 @@
 /// Un signalement : une annonce ou une personne jugée abusive.
-/// Les signalements seront vérifiés par la communauté / l'équipe CampusLost.
+/// Collection Firestore « signalements », lue par l'équipe CampusLost
+/// depuis la console Firebase.
 class Signalement {
   final String cible;   // "annonce" ou "personne"
-  final int cibleId;
+  final String cibleId;
   final String motif;   // ex. : "Tentative d'arnaque"
-  final int auteurId;   // qui a signalé
+  final String auteurId; // qui a signalé
   final DateTime date;
 
   Signalement({
@@ -14,4 +15,12 @@ class Signalement {
     required this.auteurId,
     required this.date,
   });
+
+  Map<String, dynamic> versMap() => {
+        'cible': cible,
+        'cibleId': cibleId,
+        'motif': motif,
+        'auteurId': auteurId,
+        'date': date.millisecondsSinceEpoch,
+      };
 }

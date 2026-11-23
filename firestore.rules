@@ -1,0 +1,49 @@
+rules_version = '2';
+
+// Règles de sécurité de CampusLost (à coller dans la console Firebase :
+// Firestore Database → Règles → Publier).
+// Principe : il faut être connecté pour tout, et chacun ne modifie que
+// ce qui lui appartient.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function connecte() { return request.auth != null; }
+    function moi() { return request.auth.uid; }
+
+    // Profils : lisibles par les étudiants connectés, modifiables par leur titulaire
+    match /utilisateurs/{uid} {
+      allow read: if connecte();
+      allow create, update: if connecte() && moi() == uid;
+    }
+
+    // Annonces : tout le monde (connecté) les voit ; seul l'auteur les modifie.
+    // Les annonces d'exemple (auteur « exemple-… ») peuvent être créées une fois.
+    match /annonces/{id} {
+      allow read: if connecte();
+      allow create: if connecte()
+        && (request.resource.data.auteurId == moi()
+            || request.resource.data.auteurId.matches('exemple-.*'));
+      allow update, delete: if connecte() && resource.data.auteurId == moi();
+    }
+
+    // Réclamations : visibles seulement par le demandeur et le propriétaire.
+    // Le détail secret ne doit pas être lu par les autres étudiants.
+    match /reclamations/{id} {
+      allow read: if connecte() && moi() in resource.data.participants;
+      allow create: if connecte() && request.resource.data.demandeurId == moi();
+      allow update, delete: if connecte() && resource.data.proprietaireId == moi();
+    }
+
+    // Conversations : visibles et modifiables par les deux participants
+    match /conversations/{id} {
+      allow read: if connecte()
+        && (resource == null || moi() in resource.data.participants);
+      allow create, update: if connecte() && moi() in request.resource.data.participants;
+    }
+
+    // Signalements : on peut en envoyer, seule l'équipe les lit (console)
+    match /signalements/{id} {
+      allow create: if connecte() && request.resource.data.auteurId == moi();
+    }
+  }
+}

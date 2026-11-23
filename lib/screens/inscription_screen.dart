@@ -11,7 +11,7 @@ import '../widgets/champs_formulaire.dart';
 /// Écran 3 : création d'un compte.
 ///
 /// L'utilisateur ne s'inscrit qu'une seule fois : ensuite, l'application
-/// le garde connecté (voir AuthService).
+/// le garde connecté (voir AuthRepository).
 class InscriptionScreen extends ConsumerStatefulWidget {
   const InscriptionScreen({super.key});
 

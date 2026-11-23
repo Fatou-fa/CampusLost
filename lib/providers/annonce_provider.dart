@@ -1,154 +1,72 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/annonce_model.dart';
+import '../repositories/annonce_repository.dart';
 import 'auth_provider.dart';
 
-/// Toutes les annonces.
+/// Toutes les annonces, synchronisées avec Firestore en temps réel.
 ///
 /// Lecture :  ref.watch(annoncesProvider)   → la liste des annonces
 /// Action :   ref.read(annoncesProvider.notifier).ajouter(annonce)
 ///
-/// TEMPORAIRE : les annonces sont en mémoire (elles reviennent aux exemples
-/// au redémarrage). Quand l'API PHP sera prête, chaque méthode enverra la
-/// modification au serveur ; les écrans ne changeront pas.
+/// Les actions écrivent dans Firestore ; Firestore renvoie alors la
+/// nouvelle liste par le flux, et les écrans se redessinent. Grâce au
+/// cache de Firestore, le changement apparaît tout de suite, même hors ligne.
 final annoncesProvider =
     NotifierProvider<AnnoncesNotifier, List<Annonce>>(AnnoncesNotifier.new);
 
 class AnnoncesNotifier extends Notifier<List<Annonce>> {
-  /// Données d'exemple, en attendant l'API PHP.
-  /// Les annonces 6 et 7 appartiennent au compte de démonstration (id 99).
+  AnnonceRepository get _repo => ref.read(annonceRepositoryProvider);
+
   @override
   List<Annonce> build() {
-    return [
-      Annonce(
-        id: 1,
-        titre: "Carte d'étudiant",
-        description:
-            "Carte d'étudiant UGB au nom d'Awa Ndiaye, oubliée sur une table du 1er étage.",
-        type: 'perdu',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/carte.png',
-        date: 'Il y a 2 h',
-        categorie: 'Papiers',
-        lieu: 'Bibliothèque universitaire',
-        auteurId: 201,
-        auteurNom: 'Awa N.',
-        auteurTelephone: '771234567',
-      ),
-      Annonce(
-        id: 2,
-        titre: 'Trousseau de clés',
-        description:
-            "Deux clés sur un anneau argenté, dont une dorée. Trouvées sur une "
-            "table près de l'entrée du Resto U, à l'heure du déjeuner.",
-        type: 'trouve',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/cles.png',
-        date: 'Hier, 12 h 30',
-        categorie: 'Clés',
-        lieu: 'Resto U',
-        auteurId: 202,
-        auteurNom: 'Moussa D.',
-        auteurTelephone: '781234567',
-      ),
-      Annonce(
-        id: 3,
-        titre: 'Smartphone bleu',
-        description: 'Smartphone à coque bleue, écran légèrement fissuré en bas à droite.',
-        type: 'perdu',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/telephone.png',
-        date: 'Lundi',
-        categorie: 'Téléphones',
-        lieu: 'Amphithéâtre A',
-        auteurId: 203,
-        auteurNom: 'Ibrahima S.',
-        auteurTelephone: '761234567',
-      ),
-      Annonce(
-        id: 4,
-        titre: 'Lunettes de vue',
-        description: 'Lunettes à monture noire dans un étui gris, laissées près du poste 12.',
-        type: 'trouve',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/lunettes.png',
-        date: 'Lundi',
-        categorie: 'Lunettes',
-        lieu: 'Salle informatique',
-        auteurId: 202,
-        auteurNom: 'Moussa D.',
-        auteurTelephone: '781234567',
-      ),
-      Annonce(
-        id: 5,
-        titre: 'Portefeuille marron',
-        description: 'Portefeuille en cuir marron, trouvé sur les gradins. Contenu à décrire pour le récupérer.',
-        type: 'trouve',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/portefeuille.png',
-        date: 'Dimanche',
-        categorie: 'Portefeuilles',
-        lieu: 'Terrain de sport',
-        auteurId: 204,
-        auteurNom: 'Khady F.',
-        auteurTelephone: '701234567',
-      ),
-      Annonce(
-        id: 6,
-        titre: 'Écouteurs sans fil',
-        description: 'Écouteurs blancs dans leur boîtier, trouvés sur un banc devant le pavillon G.',
-        type: 'trouve',
-        statut: 'active',
-        photoUrl: 'assets/images/objets/ecouteurs.png',
-        date: 'Mardi',
-        categorie: 'Audio',
-        lieu: 'Pavillons',
-        auteurId: 99,
-        auteurNom: 'Étudiant D.',
-        auteurTelephone: '770000000',
-      ),
-      Annonce(
-        id: 7,
-        titre: 'Calculatrice',
-        description: 'Calculatrice scientifique oubliée après un examen.',
-        type: 'trouve',
-        statut: 'restitue',
-        photoUrl: 'assets/images/objets/calculatrice.png',
-        date: 'La semaine dernière',
-        categorie: 'Fournitures',
-        lieu: 'Amphithéâtre B',
-        auteurId: 99,
-        auteurNom: 'Étudiant D.',
-        auteurTelephone: '770000000',
-      ),
-    ];
+    // Les règles Firestore demandent d'être connecté pour lire les annonces.
+    // ref.watch : à la connexion / déconnexion, build() est relancé.
+    final moi = ref.watch(authProvider);
+    if (moi == null) return [];
+
+    final repo = ref.watch(annonceRepositoryProvider);
+    repo.ajouterExemplesSiVide().catchError(_journal);
+
+    // Écoute du flux Firestore : chaque nouvelle liste remplace l'état
+    final abonnement = repo.ecouter().listen(
+          (liste) => state = liste,
+          onError: _journal,
+        );
+    ref.onDispose(abonnement.cancel); // on arrête d'écouter quand c'est fini
+    return [];
   }
 
-  /// Numéro pour la prochaine annonce (en attendant l'id donné par MySQL).
-  int get prochainId {
-    var max = 0;
-    for (final a in state) {
-      if (a.id > max) max = a.id;
-    }
-    return max + 1;
-  }
+  /// Nouvel id pour une annonce, avant de l'envoyer.
+  String nouvelId() => _repo.nouvelId();
 
-  // Riverpod : on ne modifie jamais la liste, on la remplace par une nouvelle
-  // (state = …). C'est ce remplacement qui prévient les écrans.
+  // Chaque action retourne null si tout va bien, sinon un message d'erreur.
 
-  /// Ajoute une annonce publiée en tête de liste.
-  void ajouter(Annonce annonce) => state = [annonce, ...state];
+  /// Publie une annonce.
+  Future<String?> ajouter(Annonce annonce) => _essayer(() => _repo.ajouter(annonce));
 
-  /// Remplace une annonce existante (même id) par sa version modifiée.
-  void modifier(Annonce annonce) =>
-      state = [for (final a in state) a.id == annonce.id ? annonce : a];
+  /// Enregistre une annonce modifiée (même id).
+  Future<String?> modifier(Annonce annonce) => _essayer(() => _repo.modifier(annonce));
 
   /// L'objet a été rendu : l'annonce passe dans « Restituées ».
-  void marquerRestituee(int id) => state = [
-        for (final a in state) a.id == id ? a.copieAvecStatut('restitue') : a
-      ];
+  Future<String?> marquerRestituee(String id) =>
+      _essayer(() => _repo.changerStatut(id, 'restitue'));
 
-  void supprimer(int id) => state = state.where((a) => a.id != id).toList();
+  Future<String?> supprimer(String id) => _essayer(() => _repo.supprimer(id));
+
+  Future<String?> _essayer(Future<void> Function() action) async {
+    try {
+      await action();
+      return null;
+    } catch (e) {
+      _journal(e);
+      return e.toString().replaceFirst('Exception: ', '');
+    }
+  }
+
+  /// Affiche l'erreur dans la console de débogage.
+  static void _journal(Object e) => debugPrint('CampusLost / annonces : $e');
 }
 
 /// Texte tapé dans la barre de recherche de l'accueil.
@@ -184,8 +102,8 @@ final mesAnnoncesProvider = Provider<List<Annonce>>((ref) {
 });
 
 /// Une annonce à partir de son id (null si elle a été supprimée).
-/// « family » : un provider qui prend un paramètre → annonceParIdProvider(3).
-final annonceParIdProvider = Provider.family<Annonce?, int>((ref, id) {
+/// « family » : un provider qui prend un paramètre → annonceParIdProvider(id).
+final annonceParIdProvider = Provider.family<Annonce?, String>((ref, id) {
   for (final a in ref.watch(annoncesProvider)) {
     if (a.id == id) return a;
   }

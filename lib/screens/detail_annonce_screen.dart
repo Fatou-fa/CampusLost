@@ -21,7 +21,7 @@ import '../widgets/photo_annonce.dart';
 ///  - objet restitué    → simple information.
 class DetailAnnonceScreen extends ConsumerWidget {
   /// Id de l'annonce, lu dans l'adresse (/annonce/3) par go_router.
-  final int annonceId;
+  final String annonceId;
 
   const DetailAnnonceScreen({super.key, required this.annonceId});
 
@@ -575,6 +575,7 @@ class _FeuilleReclamationState extends ConsumerState<_FeuilleReclamation> {
     ref.read(reclamationsProvider.notifier).reclamer(
           annonceId: widget.annonce.id,
           annonceTitre: widget.annonce.titre,
+          proprietaireId: widget.annonce.auteurId,
           demandeurId: moi.id,
           demandeurNom: '${majuscule(moi.prenom)} ${moi.nom.isEmpty ? '' : '${moi.nom[0].toUpperCase()}.'}'.trim(),
           demandeurTelephone: moi.telephone,

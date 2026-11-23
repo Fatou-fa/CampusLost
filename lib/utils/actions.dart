@@ -69,7 +69,7 @@ void ecrireA(
   BuildContext context,
   WidgetRef ref, {
   required Annonce annonce,
-  int? interlocuteurId,
+  String? interlocuteurId,
   String interlocuteurNom = '',
   String interlocuteurTelephone = '',
   String texte = '',
@@ -103,7 +103,7 @@ Future<void> signaler(
   BuildContext context,
   WidgetRef ref, {
   required String cible, // "annonce" ou "personne"
-  required int cibleId,
+  required String cibleId,
 }) async {
   final moi = ref.read(authProvider);
   final messager = ScaffoldMessenger.of(context);

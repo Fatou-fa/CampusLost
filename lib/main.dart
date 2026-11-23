@@ -1,26 +1,33 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/routes.dart';
+import 'firebase_options.dart'; // créé par « flutterfire configure »
 import 'providers/auth_provider.dart';
-import 'services/auth_service.dart';
+import 'repositories/auth_repository.dart';
 import 'theme/couleurs.dart';
 
 /// Point d'entrée de CampusLost.
 ///
-/// Avant d'afficher le premier écran, on regarde si un utilisateur est déjà
-/// connecté sur ce téléphone (connexion unique) :
-///  - oui → on ouvre directement l'accueil ;
-///  - non → on ouvre l'écran de bienvenue (inscription / connexion).
+/// 1. On démarre Firebase (comme dans dakarconnect).
+/// 2. On regarde si un utilisateur est déjà connecté (connexion unique) :
+///    - oui → on ouvre directement l'accueil ;
+///    - non → on ouvre l'écran de bienvenue (inscription / connexion).
 Future<void> main() async {
-  // Obligatoire avant d'utiliser un plugin (SharedPreferences) dans main()
+  // Obligatoire avant d'utiliser un plugin dans main()
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  final utilisateur = await AuthService().chargerSession();
+  final utilisateur =
+      await AuthRepository(FirebaseAuth.instance, FirebaseFirestore.instance)
+          .chargerSession();
 
   runApp(
     // ProviderScope : obligatoire avec Riverpod, il contient tous les providers.
-    // overrideWithValue donne à Riverpod la session lue sur le téléphone.
+    // overrideWithValue donne à Riverpod la session trouvée au démarrage.
     ProviderScope(
       overrides: [utilisateurInitialProvider.overrideWithValue(utilisateur)],
       child: const CampusLostApp(),

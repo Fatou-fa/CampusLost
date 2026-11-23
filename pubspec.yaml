@@ -46,6 +46,11 @@ dependencies:
   # Mémorise la session sur le téléphone (connexion unique)
   shared_preferences: ^2.3.2
 
+  # Backend Firebase (mêmes versions que dakarconnect)
+  firebase_core: ^5.1.0     # démarrage de Firebase
+  firebase_auth: ^7.0.1     # comptes : inscription, connexion, session
+  cloud_firestore: ^7.1.0   # base de données en temps réel (annonces, messages…)
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

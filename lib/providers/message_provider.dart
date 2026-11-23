@@ -1,141 +1,110 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/message_model.dart';
 import '../models/signalement_model.dart';
+import '../repositories/message_repository.dart';
 import 'auth_provider.dart';
 
-/// Toutes les conversations.
-///
-/// TEMPORAIRE : en mémoire, sur ce téléphone. Avec l'API PHP, chaque
-/// message sera envoyé au serveur (table « message ») et l'application
-/// récupérera les nouveaux messages régulièrement.
+/// Mes conversations, synchronisées avec Firestore en temps réel :
+/// un message envoyé par l'autre personne apparaît tout seul.
 final conversationsProvider =
     NotifierProvider<ConversationsNotifier, List<Conversation>>(
         ConversationsNotifier.new);
 
 class ConversationsNotifier extends Notifier<List<Conversation>> {
-  /// Exemple : Awa écrit au compte de démonstration au sujet des écouteurs.
+  MessageRepository get _repo => ref.read(messageRepositoryProvider);
+
   @override
   List<Conversation> build() {
-    final maintenant = DateTime.now();
-    return [
-      Conversation(
-        id: 1,
-        annonceId: 6,
-        annonceTitre: 'Écouteurs sans fil',
-        annoncePhoto: 'assets/images/objets/ecouteurs.png',
-        proprietaireId: 99,
-        proprietaireNom: 'Étudiant D.',
-        proprietaireTelephone: '770000000',
-        visiteurId: 201,
-        visiteurNom: 'Awa N.',
-        visiteurTelephone: '771234567',
-        messages: [
-          Message(
-            id: 1,
-            auteurId: 201,
-            texte: 'Bonjour ! Je crois que ce sont mes écouteurs, '
-                'je vous ai envoyé une demande.',
-            heure: maintenant.subtract(const Duration(minutes: 25)),
-          ),
-          Message(
-            id: 2,
-            auteurId: 201,
-            texte: 'Je suis à la bibliothèque cet après-midi si ça vous arrange.',
-            heure: maintenant.subtract(const Duration(minutes: 20)),
-          ),
-        ],
-      ),
-    ];
+    final moi = ref.watch(authProvider);
+    if (moi == null) return [];
+
+    final abonnement = ref
+        .watch(messageRepositoryProvider)
+        .ecouter(moi.id)
+        .listen((liste) => state = liste, onError: _journal);
+    ref.onDispose(abonnement.cancel);
+    return [];
   }
 
   /// Retourne l'id de la conversation sur cette annonce entre ces deux
   /// personnes ; la crée si elle n'existe pas encore.
-  int ouvrir({
-    required int annonceId,
+  ///
+  /// L'id est fabriqué à partir de l'annonce et du visiteur : deux appuis
+  /// sur « Écrire » ouvrent donc toujours la même conversation.
+  String ouvrir({
+    required String annonceId,
     required String annonceTitre,
     String? annoncePhoto,
-    required int proprietaireId,
+    required String proprietaireId,
     required String proprietaireNom,
     required String proprietaireTelephone,
-    required int visiteurId,
+    required String visiteurId,
     required String visiteurNom,
     required String visiteurTelephone,
   }) {
+    final id = '${annonceId}_$visiteurId';
     for (final c in state) {
-      if (c.annonceId == annonceId &&
-          c.proprietaireId == proprietaireId &&
-          c.visiteurId == visiteurId) {
-        return c.id;
-      }
+      if (c.id == id) return id;
     }
-    var id = 1;
-    for (final c in state) {
-      if (c.id >= id) id = c.id + 1;
-    }
-    state = [
-      ...state,
-      Conversation(
-        id: id,
-        annonceId: annonceId,
-        annonceTitre: annonceTitre,
-        annoncePhoto: annoncePhoto,
-        proprietaireId: proprietaireId,
-        proprietaireNom: proprietaireNom,
-        proprietaireTelephone: proprietaireTelephone,
-        visiteurId: visiteurId,
-        visiteurNom: visiteurNom,
-        visiteurTelephone: visiteurTelephone,
-      ),
-    ];
+
+    final nouvelle = Conversation(
+      id: id,
+      annonceId: annonceId,
+      annonceTitre: annonceTitre,
+      // Une photo prise au téléphone est lourde : on ne la recopie pas ici
+      annoncePhoto:
+          (annoncePhoto ?? '').startsWith('assets/') ? annoncePhoto : null,
+      proprietaireId: proprietaireId,
+      proprietaireNom: proprietaireNom,
+      proprietaireTelephone: proprietaireTelephone,
+      visiteurId: visiteurId,
+      visiteurNom: visiteurNom,
+      visiteurTelephone: visiteurTelephone,
+    );
+    // Ajout immédiat dans l'état : l'écran s'ouvre sans attendre le réseau
+    state = [...state, nouvelle];
+    _repo.creer(nouvelle).catchError(_journal);
     return id;
   }
 
   /// Ajoute un message à la fin de la conversation.
-  void envoyer(int conversationId, int auteurId, String texte) {
-    state = [
-      for (final c in state)
-        if (c.id == conversationId)
-          c.copie(messages: [
-            ...c.messages,
-            Message(
-              id: c.messages.length + 1,
-              auteurId: auteurId,
-              texte: texte,
-              heure: DateTime.now(),
-            ),
-          ])
-        else
-          c
-    ];
+  void envoyer(String conversationId, String auteurId, String texte) {
+    final heure = DateTime.now();
+    final message = Message(
+      id: '${heure.millisecondsSinceEpoch}_$auteurId',
+      auteurId: auteurId,
+      texte: texte,
+      heure: heure,
+    );
+    _repo.envoyer(conversationId, message).catchError(_journal);
   }
 
   /// Marque comme lus les messages reçus par [moiId] dans la conversation.
-  void marquerLus(int conversationId, int moiId) {
-    // Rien à faire s'il n'y a aucun message non lu (évite de redessiner)
-    final aLire = state.any((c) => c.id == conversationId && c.nonLus(moiId) > 0);
-    if (!aLire) return;
-    state = [
-      for (final c in state)
-        if (c.id == conversationId)
-          c.copie(messages: [
-            for (final m in c.messages) m.auteurId != moiId ? m.copieLue() : m
-          ])
-        else
-          c
+  void marquerLus(String conversationId, String moiId) {
+    Conversation? conversation;
+    for (final c in state) {
+      if (c.id == conversationId) conversation = c;
+    }
+    // Rien à faire s'il n'y a aucun message non lu (évite une écriture)
+    if (conversation == null || conversation.nonLus(moiId) == 0) return;
+
+    final lus = [
+      for (final m in conversation.messages)
+        m.auteurId != moiId ? m.copieLue() : m
     ];
+    _repo.remplacerMessages(conversationId, lus).catchError(_journal);
   }
 
   /// Bloque la conversation : plus personne ne peut y écrire.
-  void bloquer(int conversationId, int moiId) => state = [
-        for (final c in state)
-          c.id == conversationId ? c.copie(bloqueePar: moiId) : c
-      ];
+  void bloquer(String conversationId, String moiId) =>
+      _repo.changerBlocage(conversationId, moiId).catchError(_journal);
 
-  void debloquer(int conversationId) => state = [
-        for (final c in state)
-          c.id == conversationId ? c.copie(debloquer: true) : c
-      ];
+  void debloquer(String conversationId) =>
+      _repo.changerBlocage(conversationId, null).catchError(_journal);
+
+  static void _journal(Object e) => debugPrint('CampusLost / messages : $e');
 }
 
 /// Mes conversations, la plus récente en haut.
@@ -169,7 +138,7 @@ final nbMessagesNonLusProvider = Provider<int>((ref) {
 
 /// Une conversation à partir de son id.
 final conversationParIdProvider =
-    Provider.family<Conversation?, int>((ref, id) {
+    Provider.family<Conversation?, String>((ref, id) {
   for (final c in ref.watch(conversationsProvider)) {
     if (c.id == id) return c;
   }
@@ -180,7 +149,8 @@ final conversationParIdProvider =
 //  Signalements
 // =====================================================================
 
-/// Signalements envoyés (TEMPORAIRE : en mémoire, en attendant l'API).
+/// Envoi des signalements vers Firestore (collection « signalements »).
+/// L'état garde ceux envoyés depuis ce téléphone pendant la session.
 final signalementsProvider =
     NotifierProvider<SignalementsNotifier, List<Signalement>>(
         SignalementsNotifier.new);
@@ -191,19 +161,21 @@ class SignalementsNotifier extends Notifier<List<Signalement>> {
 
   void signaler({
     required String cible,
-    required int cibleId,
+    required String cibleId,
     required String motif,
-    required int auteurId,
+    required String auteurId,
   }) {
-    state = [
-      ...state,
-      Signalement(
-        cible: cible,
-        cibleId: cibleId,
-        motif: motif,
-        auteurId: auteurId,
-        date: DateTime.now(),
-      ),
-    ];
+    final signalement = Signalement(
+      cible: cible,
+      cibleId: cibleId,
+      motif: motif,
+      auteurId: auteurId,
+      date: DateTime.now(),
+    );
+    state = [...state, signalement];
+    ref
+        .read(messageRepositoryProvider)
+        .signaler(signalement)
+        .catchError((Object e) => debugPrint('CampusLost / signalement : $e'));
   }
 }

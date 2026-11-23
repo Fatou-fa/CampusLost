@@ -19,7 +19,7 @@ import '../widgets/photo_annonce.dart';
 ///   les champs sont pré-remplis et le bouton devient « Enregistrer ».
 class FormulaireAnnonceScreen extends ConsumerStatefulWidget {
   final String type;
-  final int? annonceId;
+  final String? annonceId;
 
   const FormulaireAnnonceScreen({
     super.key,
@@ -147,7 +147,7 @@ class _FormulaireAnnonceScreenState
     try {
       // imageQuality et maxWidth : photo plus légère, plus rapide à afficher
       final fichier = await ImagePicker()
-          .pickImage(source: source, imageQuality: 70, maxWidth: 1200);
+          .pickImage(source: source, imageQuality: 60, maxWidth: 900);
       if (fichier != null && mounted) setState(() => _photo = fichier.path);
     } catch (_) {
       if (!mounted) return;
@@ -189,7 +189,7 @@ class _FormulaireAnnonceScreenState
 
     final ancienne = _ancienne;
     final annonce = Annonce(
-      id: ancienne?.id ?? annonces.prochainId,
+      id: ancienne?.id ?? annonces.nouvelId(),
       titre: _titre.text.trim(),
       description: description,
       type: _type,
@@ -199,7 +199,7 @@ class _FormulaireAnnonceScreenState
       date: _date.text.trim(),
       categorie: _categorie,
       lieu: _lieu.text.trim(),
-      auteurId: ancienne?.auteurId ?? auteur?.id ?? 0,
+      auteurId: ancienne?.auteurId ?? auteur?.id ?? '',
       auteurNom: ancienne?.auteurNom ??
           (auteur == null
               ? 'Anonyme'
@@ -207,16 +207,21 @@ class _FormulaireAnnonceScreenState
       auteurTelephone: ancienne?.auteurTelephone ?? auteur?.telephone ?? '',
     );
 
-    if (_modification) {
-      annonces.modifier(annonce);
-    } else {
-      annonces.ajouter(annonce);
-    }
+    // Envoi vers Firestore. On n'attend pas la fin : grâce au cache de
+    // Firestore, l'annonce apparaît tout de suite dans la liste.
+    final envoi =
+        _modification ? annonces.modifier(annonce) : annonces.ajouter(annonce);
 
     context.pop(); // retour à l'écran précédent
     messager.showSnackBar(SnackBar(
       content: Text(_modification ? 'Annonce modifiée' : 'Annonce publiée'),
     ));
+    // Si l'envoi échoue (photo trop lourde, règles…), on prévient l'utilisateur
+    envoi.then((erreur) {
+      if (erreur != null) {
+        messager.showSnackBar(SnackBar(content: Text('Échec de l\'envoi : $erreur')));
+      }
+    });
   }
 
   @override

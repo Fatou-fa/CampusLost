@@ -18,7 +18,7 @@ class MessagesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final conversations = ref.watch(mesConversationsProvider);
-    final moiId = ref.watch(authProvider)?.id ?? 0;
+    final moiId = ref.watch(authProvider)?.id ?? '';
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
@@ -42,7 +42,7 @@ class MessagesScreen extends ConsumerWidget {
   }
 
   /// Une conversation : photo de l'objet, nom, aperçu du dernier message.
-  Widget _ligne(BuildContext context, Conversation c, int moiId) {
+  Widget _ligne(BuildContext context, Conversation c, String moiId) {
     final nonLus = c.nonLus(moiId);
     final dernier = c.dernier;
     final apercu = dernier == null
