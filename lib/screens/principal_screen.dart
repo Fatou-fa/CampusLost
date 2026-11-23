@@ -1,66 +1,44 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
-import '../providers/annonce_provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/reclamation_provider.dart';
 import '../widgets/barre_navigation.dart';
-import 'accueil_screen.dart';
-import 'mes_annonces_screen.dart';
-import 'profil_screen.dart';
-import 'reclamations_screen.dart';
 
-/// Écran principal après la connexion : les 4 onglets et la barre du bas.
+/// Écran principal après la connexion : l'onglet affiché et la barre du bas.
 ///
-/// IndexedStack garde les 4 pages en mémoire : quand on change d'onglet,
-/// chaque page retrouve sa position (défilement, recherche…).
-class PrincipalScreen extends StatefulWidget {
-  const PrincipalScreen({super.key});
+/// [navigationShell] est fourni par go_router (StatefulShellRoute) : il
+/// contient les 4 onglets et sait passer de l'un à l'autre (goBranch).
+class PrincipalScreen extends ConsumerWidget {
+  final StatefulNavigationShell navigationShell;
+
+  const PrincipalScreen({super.key, required this.navigationShell});
 
   @override
-  State<PrincipalScreen> createState() => _PrincipalScreenState();
-}
-
-class _PrincipalScreenState extends State<PrincipalScreen> {
-  int _onglet = 0; // 0 Accueil, 1 Mes annonces, 2 Réclamations, 3 Profil
-
-  void _allerA(int onglet) => setState(() => _onglet = onglet);
-
-  @override
-  Widget build(BuildContext context) {
-    // Nombre de réclamations reçues en attente, pour le badge
-    final moi = context.watch<AuthProvider>().utilisateur;
-    final mesIds = moi == null
-        ? <int>[]
-        : context
-            .watch<AnnonceProvider>()
-            .deAuteur(moi.id)
-            .map((a) => a.id)
-            .toList();
-    final aTraiter = context.watch<ReclamationProvider>().enAttente(mesIds);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final onglet = navigationShell.currentIndex;
 
     return PopScope(
       // Bouton retour Android : revient d'abord à l'accueil avant de quitter
-      canPop: _onglet == 0,
+      canPop: onglet == 0,
       onPopInvokedWithResult: (aQuitte, _) {
-        if (!aQuitte) _allerA(0);
+        if (!aQuitte) navigationShell.goBranch(0);
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _onglet,
-          children: [
-            const AccueilScreen(),
-            const MesAnnoncesScreen(),
-            const ReclamationsScreen(),
-            ProfilScreen(allerA: _allerA),
-          ],
-        ),
+        body: navigationShell,
+        // Bouton « + » à cheval sur le haut de la barre (centerDocked).
+        // On le cache quand le clavier est ouvert pour ne pas gêner la saisie.
+        floatingActionButton: MediaQuery.viewInsetsOf(context).bottom > 0
+            ? null
+            : BoutonPublier(onPressed: () => context.push(Routes.publier)),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
         bottomNavigationBar: BarreNavigation(
-          index: _onglet,
-          badge: aTraiter,
-          onChange: _allerA,
-          onPublier: () => Navigator.pushNamed(context, Routes.choixType),
+          index: onglet,
+          // Nombre de réclamations à traiter, pour le badge
+          badge: ref.watch(nbATraiterProvider),
+          // Retoucher l'onglet actif le ramène à son premier écran
+          onChange: (i) => navigationShell.goBranch(i, initialLocation: i == onglet),
         ),
       ),
     );

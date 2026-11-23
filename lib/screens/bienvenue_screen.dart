@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../theme/couleurs.dart';
@@ -72,7 +73,7 @@ class BienvenueScreen extends StatelessWidget {
                   // Bouton principal
                   ElevatedButton(
                     onPressed: () =>
-                        Navigator.pushNamed(context, Routes.inscription),
+                        context.push(Routes.inscription),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Couleurs.marron,
                       foregroundColor: Colors.white,
@@ -92,7 +93,7 @@ class BienvenueScreen extends StatelessWidget {
                   // Bouton secondaire
                   OutlinedButton(
                     onPressed: () =>
-                        Navigator.pushNamed(context, Routes.connexion),
+                        context.push(Routes.connexion),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Couleurs.marron,
                       side: const BorderSide(color: Couleurs.marron, width: 1.5),

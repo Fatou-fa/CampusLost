@@ -1,6 +1,8 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/reclamation_model.dart';
+import 'annonce_provider.dart';
+import 'auth_provider.dart';
 
 /// Réclamations : « cet objet trouvé est à moi ».
 ///
@@ -9,49 +11,29 @@ import '../models/reclamation_model.dart';
 /// dans l'onglet Réclamations.
 ///
 /// TEMPORAIRE : en mémoire, en attendant l'API PHP.
-class ReclamationProvider extends ChangeNotifier {
-  // Exemple : Awa réclame les écouteurs trouvés par le compte de démonstration
-  final List<Reclamation> _reclamations = [
-    Reclamation(
-      id: 1,
-      message: 'Bonjour, je pense que ce sont mes écouteurs, '
-          'je les ai perdus mardi en sortant du pavillon.',
-      detail: 'Mes initiales « AN » sont gravées sur le boîtier',
-      date: 'Il y a 20 min',
-      statut: 'en_attente',
-      annonceId: 6,
-      annonceTitre: 'Écouteurs sans fil',
-      demandeurId: 201,
-      demandeurNom: 'Awa N.',
-      demandeurTelephone: '771234567',
-    ),
-  ];
+final reclamationsProvider =
+    NotifierProvider<ReclamationsNotifier, List<Reclamation>>(
+        ReclamationsNotifier.new);
 
-  /// Réclamations reçues sur les annonces dont les ids sont donnés
-  /// (= les annonces de l'utilisateur connecté). Les plus récentes d'abord.
-  List<Reclamation> recues(List<int> idsMesAnnonces) => _reclamations
-      .where((r) => idsMesAnnonces.contains(r.annonceId))
-      .toList()
-      .reversed
-      .toList();
-
-  /// Réclamations envoyées par un utilisateur.
-  List<Reclamation> envoyees(int demandeurId) => _reclamations
-      .where((r) => r.demandeurId == demandeurId)
-      .toList()
-      .reversed
-      .toList();
-
-  /// Nombre de réclamations reçues qui attendent une réponse (badge).
-  int enAttente(List<int> idsMesAnnonces) =>
-      recues(idsMesAnnonces).where((r) => r.estEnAttente).length;
-
-  /// La réclamation de cet utilisateur sur cette annonce, s'il y en a une.
-  Reclamation? deUtilisateurSur(int annonceId, int demandeurId) {
-    for (final r in _reclamations) {
-      if (r.annonceId == annonceId && r.demandeurId == demandeurId) return r;
-    }
-    return null;
+class ReclamationsNotifier extends Notifier<List<Reclamation>> {
+  /// Exemple : Awa réclame les écouteurs trouvés par le compte de démonstration.
+  @override
+  List<Reclamation> build() {
+    return [
+      Reclamation(
+        id: 1,
+        message: 'Bonjour, je pense que ce sont mes écouteurs, '
+            'je les ai perdus mardi en sortant du pavillon.',
+        detail: 'Mes initiales « AN » sont gravées sur le boîtier',
+        date: 'Il y a 20 min',
+        statut: 'en_attente',
+        annonceId: 6,
+        annonceTitre: 'Écouteurs sans fil',
+        demandeurId: 201,
+        demandeurNom: 'Awa N.',
+        demandeurTelephone: '771234567',
+      ),
+    ];
   }
 
   /// Envoie une réclamation.
@@ -65,49 +47,84 @@ class ReclamationProvider extends ChangeNotifier {
     required String detail,
   }) {
     var prochainId = 1;
-    for (final r in _reclamations) {
+    for (final r in state) {
       if (r.id >= prochainId) prochainId = r.id + 1;
     }
-    _reclamations.add(Reclamation(
-      id: prochainId,
-      message: message,
-      detail: detail,
-      date: "À l'instant",
-      statut: 'en_attente',
-      annonceId: annonceId,
-      annonceTitre: annonceTitre,
-      demandeurId: demandeurId,
-      demandeurNom: demandeurNom,
-      demandeurTelephone: demandeurTelephone,
-    ));
-    notifyListeners();
+    state = [
+      ...state,
+      Reclamation(
+        id: prochainId,
+        message: message,
+        detail: detail,
+        date: "À l'instant",
+        statut: 'en_attente',
+        annonceId: annonceId,
+        annonceTitre: annonceTitre,
+        demandeurId: demandeurId,
+        demandeurNom: demandeurNom,
+        demandeurTelephone: demandeurTelephone,
+      ),
+    ];
   }
 
   /// Accepte une réclamation. Les autres réclamations en attente sur la
-  /// même annonce sont refusées automatiquement (l'objet n'a qu'un propriétaire).
+  /// même annonce sont refusées automatiquement (un seul propriétaire).
   void accepter(int id) {
-    final choisie = _reclamations.firstWhere((r) => r.id == id);
-    for (var i = 0; i < _reclamations.length; i++) {
-      final r = _reclamations[i];
-      if (r.id == id) {
-        _reclamations[i] = r.copieAvecStatut('acceptee');
-      } else if (r.annonceId == choisie.annonceId && r.estEnAttente) {
-        _reclamations[i] = r.copieAvecStatut('refusee');
-      }
-    }
-    notifyListeners();
+    final choisie = state.firstWhere((r) => r.id == id);
+    state = [
+      for (final r in state)
+        if (r.id == id)
+          r.copieAvecStatut('acceptee')
+        else if (r.annonceId == choisie.annonceId && r.estEnAttente)
+          r.copieAvecStatut('refusee')
+        else
+          r
+    ];
   }
 
-  void refuser(int id) {
-    final index = _reclamations.indexWhere((r) => r.id == id);
-    if (index == -1) return;
-    _reclamations[index] = _reclamations[index].copieAvecStatut('refusee');
-    notifyListeners();
-  }
+  void refuser(int id) => state = [
+        for (final r in state) r.id == id ? r.copieAvecStatut('refusee') : r
+      ];
 
   /// Supprime les réclamations d'une annonce supprimée.
-  void supprimerPourAnnonce(int annonceId) {
-    _reclamations.removeWhere((r) => r.annonceId == annonceId);
-    notifyListeners();
-  }
+  void supprimerPourAnnonce(int annonceId) =>
+      state = state.where((r) => r.annonceId != annonceId).toList();
 }
+
+/// Réclamations reçues sur mes annonces, les plus récentes d'abord.
+final reclamationsRecuesProvider = Provider<List<Reclamation>>((ref) {
+  final mesIds = ref.watch(mesAnnoncesProvider).map((a) => a.id).toSet();
+  return ref
+      .watch(reclamationsProvider)
+      .where((r) => mesIds.contains(r.annonceId))
+      .toList()
+      .reversed
+      .toList();
+});
+
+/// Réclamations que j'ai envoyées, les plus récentes d'abord.
+final reclamationsEnvoyeesProvider = Provider<List<Reclamation>>((ref) {
+  final moi = ref.watch(authProvider);
+  if (moi == null) return [];
+  return ref
+      .watch(reclamationsProvider)
+      .where((r) => r.demandeurId == moi.id)
+      .toList()
+      .reversed
+      .toList();
+});
+
+/// Nombre de réclamations reçues qui attendent ma réponse (badge du bas).
+final nbATraiterProvider = Provider<int>((ref) =>
+    ref.watch(reclamationsRecuesProvider).where((r) => r.estEnAttente).length);
+
+/// Ma réclamation sur une annonce, s'il y en a une (pour le détail).
+final maReclamationSurProvider =
+    Provider.family<Reclamation?, int>((ref, annonceId) {
+  final moi = ref.watch(authProvider);
+  if (moi == null) return null;
+  for (final r in ref.watch(reclamationsProvider)) {
+    if (r.annonceId == annonceId && r.demandeurId == moi.id) return r;
+  }
+  return null;
+});

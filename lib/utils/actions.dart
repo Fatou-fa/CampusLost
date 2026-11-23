@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../config/routes.dart';
+import '../models/annonce_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/message_provider.dart';
 import '../theme/couleurs.dart';
 
 /// Petites actions réutilisées par plusieurs écrans.
@@ -44,54 +47,98 @@ Future<void> appeler(BuildContext context, String telephone) {
   return _ouvrir(context, Uri(scheme: 'tel', path: telephone.replaceAll(' ', '')));
 }
 
-/// Propose SMS ou WhatsApp, avec un message déjà rédigé.
-Future<void> envoyerMessage(
-    BuildContext context, String telephone, String message) async {
-  final numero = telephone.replaceAll(' ', '');
-  final texte = Uri.encodeComponent(message);
+/// Heure courte d'un message : « 14:05 » aujourd'hui, sinon « 21/11 ».
+String heureCourte(DateTime heure) {
+  final maintenant = DateTime.now();
+  String deux(int n) => n.toString().padLeft(2, '0');
+  final memeJour = heure.year == maintenant.year &&
+      heure.month == maintenant.month &&
+      heure.day == maintenant.day;
+  return memeJour
+      ? '${deux(heure.hour)}:${deux(heure.minute)}'
+      : '${deux(heure.day)}/${deux(heure.month)}';
+}
 
-  await showModalBottomSheet(
+/// Ouvre (ou crée) la conversation au sujet d'une annonce, puis l'affiche.
+///
+/// - Si je ne suis pas l'auteur de l'annonce : j'écris à l'auteur.
+/// - Si je suis l'auteur : j'écris à la personne donnée par [interlocuteurId]
+///   (par exemple celle qui a demandé à récupérer l'objet).
+/// [texte] pré-remplit la zone de saisie.
+void ecrireA(
+  BuildContext context,
+  WidgetRef ref, {
+  required Annonce annonce,
+  int? interlocuteurId,
+  String interlocuteurNom = '',
+  String interlocuteurTelephone = '',
+  String texte = '',
+}) {
+  final moi = ref.read(authProvider);
+  if (moi == null) return;
+  final jeSuisAuteur = moi.id == annonce.auteurId;
+  if (jeSuisAuteur && interlocuteurId == null) return;
+
+  final monNom = '${majuscule(moi.prenom)} '
+          '${moi.nom.isEmpty ? '' : '${moi.nom[0].toUpperCase()}.'}'
+      .trim();
+
+  final id = ref.read(conversationsProvider.notifier).ouvrir(
+        annonceId: annonce.id,
+        annonceTitre: annonce.titre,
+        annoncePhoto: annonce.photoUrl,
+        proprietaireId: annonce.auteurId,
+        proprietaireNom: annonce.auteurNom,
+        proprietaireTelephone: annonce.auteurTelephone,
+        visiteurId: jeSuisAuteur ? interlocuteurId! : moi.id,
+        visiteurNom: jeSuisAuteur ? interlocuteurNom : monNom,
+        visiteurTelephone: jeSuisAuteur ? interlocuteurTelephone : moi.telephone,
+      );
+  context.push(Routes.conversation(id, texte: texte));
+}
+
+/// Signalement d'une annonce ou d'une personne : l'utilisateur choisit
+/// un motif dans une liste, puis reçoit un message de confirmation.
+Future<void> signaler(
+  BuildContext context,
+  WidgetRef ref, {
+  required String cible, // "annonce" ou "personne"
+  required int cibleId,
+}) async {
+  final moi = ref.read(authProvider);
+  final messager = ScaffoldMessenger.of(context);
+  const motifs = [
+    "Tentative d'arnaque (argent demandé…)",
+    'Fausse annonce',
+    'Propos insultants ou déplacés',
+    'Autre problème',
+  ];
+
+  final motif = await showDialog<String>(
     context: context,
-    backgroundColor: Couleurs.fond,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-    ),
-    builder: (feuille) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const SizedBox(height: 12),
-          const Text(
-            'Envoyer un message',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: Couleurs.marronFonce,
-            ),
+    builder: (dialogue) => SimpleDialog(
+      title: Text(cible == 'annonce' ? 'Signaler cette annonce' : 'Signaler cette personne'),
+      children: [
+        for (final m in motifs)
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(dialogue, m),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            child: Text(m),
           ),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.sms_outlined, color: Couleurs.marron),
-            title: const Text('SMS'),
-            onTap: () {
-              Navigator.pop(feuille);
-              _ouvrir(context, Uri.parse('sms:$numero?body=$texte'));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.chat_outlined, color: Couleurs.marron),
-            title: const Text('WhatsApp'),
-            onTap: () {
-              Navigator.pop(feuille);
-              // 221 : indicatif du Sénégal
-              _ouvrir(context, Uri.parse('https://wa.me/221$numero?text=$texte'));
-            },
-          ),
-          const SizedBox(height: 8),
-        ],
-      ),
+      ],
     ),
   );
+  if (motif == null || moi == null) return;
+
+  ref.read(signalementsProvider.notifier).signaler(
+        cible: cible,
+        cibleId: cibleId,
+        motif: motif,
+        auteurId: moi.id,
+      );
+  messager.showSnackBar(const SnackBar(
+    content: Text('Merci. Le signalement sera vérifié par l\'équipe CampusLost.'),
+  ));
 }
 
 /// Demande confirmation (retourne true si l'utilisateur accepte).
@@ -126,11 +173,12 @@ Future<bool> confirmer(
 }
 
 /// Demande confirmation, ferme la session puis revient à l'écran Bienvenue.
-Future<void> confirmerDeconnexion(BuildContext context) async {
-  // On garde le navigateur et le provider avant les « await » :
+/// [ref] vient du widget qui appelle (ConsumerWidget / ConsumerState).
+Future<void> confirmerDeconnexion(BuildContext context, WidgetRef ref) async {
+  // On garde le routeur et le notifier avant les « await » :
   // l'écran peut disparaître pendant l'attente.
-  final navigateur = Navigator.of(context, rootNavigator: true);
-  final auth = context.read<AuthProvider>();
+  final routeur = GoRouter.of(context);
+  final auth = ref.read(authProvider.notifier);
 
   final ok = await confirmer(
     context,
@@ -143,5 +191,5 @@ Future<void> confirmerDeconnexion(BuildContext context) async {
 
   await auth.deconnecter();
   // On vide la pile d'écrans : le bouton retour ne ramène pas à l'accueil
-  navigateur.pushNamedAndRemoveUntil(Routes.bienvenue, (_) => false);
+  routeur.go(Routes.bienvenue); // go : remplace toute la pile d'écrans
 }

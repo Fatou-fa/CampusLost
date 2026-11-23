@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../models/annonce_model.dart';
@@ -9,6 +10,7 @@ import '../providers/auth_provider.dart';
 import '../providers/reclamation_provider.dart';
 import '../theme/couleurs.dart';
 import '../utils/actions.dart';
+import '../widgets/champs_formulaire.dart';
 import '../widgets/photo_annonce.dart';
 
 /// Détail d'une annonce : grande photo, informations, description, personne
@@ -17,20 +19,21 @@ import '../widgets/photo_annonce.dart';
 ///  - objet trouvé      → « C'est à moi » (réclamation) ;
 ///  - objet perdu       → « Je l'ai trouvé » (message au propriétaire) ;
 ///  - objet restitué    → simple information.
-class DetailAnnonceScreen extends StatelessWidget {
-  final Annonce annonce;
+class DetailAnnonceScreen extends ConsumerWidget {
+  /// Id de l'annonce, lu dans l'adresse (/annonce/3) par go_router.
+  final int annonceId;
 
-  const DetailAnnonceScreen({super.key, required this.annonce});
+  const DetailAnnonceScreen({super.key, required this.annonceId});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Version à jour de l'annonce (elle a pu être modifiée ou restituée)
-    final a = context.watch<AnnonceProvider>().parId(annonce.id) ?? annonce;
-    final moi = context.watch<AuthProvider>().utilisateur;
+    final a = ref.watch(annonceParIdProvider(annonceId));
+    if (a == null) return _introuvable(context);
+
+    final moi = ref.watch(authProvider);
     final estAMoi = moi != null && moi.id == a.auteurId;
-    final maReclamation = moi == null
-        ? null
-        : context.watch<ReclamationProvider>().deUtilisateurSur(a.id, moi.id);
+    final maReclamation = ref.watch(maReclamationSurProvider(a.id));
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
@@ -149,24 +152,36 @@ class DetailAnnonceScreen extends StatelessWidget {
                           ],
                         ),
                       ),
-                      // Contacter l'auteur (pas soi-même)
-                      if (!estAMoi && a.auteurTelephone.isNotEmpty) ...[
-                        _pastille(
-                          Icons.phone_outlined,
-                          'Appeler',
-                          () => appeler(context, a.auteurTelephone),
+                    ],
+                  ),
+                ),
+
+                // ---------- Contacter l'auteur : écrire OU appeler ----------
+                // (au choix ; le numéro n'est jamais affiché)
+                if (!estAMoi) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _boutonContact(
+                          Icons.chat_bubble_outline,
+                          'Écrire',
+                          () => ecrireA(context, ref, annonce: a),
                         ),
-                        const SizedBox(width: 8),
-                        _pastille(
-                          Icons.chat_outlined,
-                          'Envoyer un message',
-                          () => envoyerMessage(context, a.auteurTelephone,
-                              'Bonjour, je vous contacte via CampusLost au sujet de « ${a.titre} ».'),
+                      ),
+                      if (a.auteurTelephone.isNotEmpty) ...[
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _boutonContact(
+                            Icons.phone_outlined,
+                            'Appeler',
+                            () => appeler(context, a.auteurTelephone),
+                          ),
                         ),
                       ],
                     ],
                   ),
-                ),
+                ],
 
                 // ---------- Conseil (objet trouvé, pas à moi) ----------
                 if (!a.estPerdue && !estAMoi && !a.estRestituee) ...[
@@ -174,8 +189,23 @@ class DetailAnnonceScreen extends StatelessWidget {
                   _conseil(
                     Icons.verified_user_outlined,
                     "C'est à vous ? Touchez « C'est à moi » et donnez un détail "
-                    "que seul le propriétaire connaît : le trouveur pourra "
+                    "que seul le propriétaire connaît : la personne qui l'a trouvé pourra "
                     "vérifier que l'objet vous appartient.",
+                  ),
+                ],
+
+                // ---------- Signaler une annonce abusive ----------
+                if (!estAMoi) ...[
+                  const SizedBox(height: 8),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          signaler(context, ref, cible: 'annonce', cibleId: a.id),
+                      style: TextButton.styleFrom(
+                          foregroundColor: Couleurs.texteDiscret),
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: const Text('Signaler cette annonce'),
+                    ),
                   ),
                 ],
               ],
@@ -184,7 +214,7 @@ class DetailAnnonceScreen extends StatelessWidget {
         ],
       ),
       // Action principale, toujours visible en bas de l'écran
-      bottomNavigationBar: _barreAction(context, a, estAMoi, maReclamation),
+      bottomNavigationBar: _barreAction(context, ref, a, estAMoi, maReclamation),
     );
   }
 
@@ -192,12 +222,17 @@ class DetailAnnonceScreen extends StatelessWidget {
   //  Barre d'action du bas
   // =====================================================================
 
-  Widget _barreAction(
-      BuildContext context, Annonce a, bool estAMoi, Reclamation? maReclamation) {
+  Widget _barreAction(BuildContext context, WidgetRef ref, Annonce a,
+      bool estAMoi, Reclamation? maReclamation) {
     Widget contenu;
 
     if (a.estRestituee) {
-      contenu = _conseil(Icons.task_alt, 'Cet objet a été rendu à son propriétaire.');
+      contenu = _conseil(
+        Icons.task_alt,
+        a.estPerdue
+            ? 'Bonne nouvelle : son propriétaire l\'a retrouvé.'
+            : 'Cet objet a été rendu à son propriétaire.',
+      );
     } else if (estAMoi) {
       contenu = Row(
         children: [
@@ -205,15 +240,15 @@ class DetailAnnonceScreen extends StatelessWidget {
             child: _boutonSecondaire(
               Icons.edit_outlined,
               'Modifier',
-              () => Navigator.pushNamed(context, Routes.formulaire, arguments: a),
+              () => context.push(Routes.modifierAnnonce(a.id)),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: _boutonPrincipal(
               Icons.check,
-              a.estPerdue ? 'Retrouvé' : 'Restitué',
-              () => _marquerRestituee(context, a),
+              a.estPerdue ? "Je l'ai retrouvé" : 'Objet rendu',
+              () => _marquerRestituee(context, ref, a),
             ),
           ),
         ],
@@ -228,10 +263,12 @@ class DetailAnnonceScreen extends StatelessWidget {
         );
       } else {
         final texte = maReclamation.estAcceptee
-            ? 'Réclamation acceptée : contactez le trouveur pour récupérer l\'objet.'
+            ? "Demande acceptée ! Appelez la personne qui l'a trouvé pour "
+                'récupérer votre objet.'
             : maReclamation.estRefusee
-                ? 'Votre réclamation a été refusée.'
-                : 'Réclamation envoyée : en attente de la réponse du trouveur.';
+                ? "Votre demande n'a pas été acceptée."
+                : "Demande envoyée. La personne qui l'a trouvé va vous répondre "
+                    '(voir l\'onglet « Demandes »).';
         contenu = _conseil(Icons.inbox_outlined, texte);
       }
     } else {
@@ -239,14 +276,14 @@ class DetailAnnonceScreen extends StatelessWidget {
       contenu = _boutonPrincipal(
         Icons.volunteer_activism_outlined,
         "Je l'ai trouvé",
-        a.auteurTelephone.isEmpty
-            ? null
-            : () => envoyerMessage(
-                  context,
-                  a.auteurTelephone,
-                  'Bonjour, je crois avoir trouvé votre « ${a.titre} » '
-                  '(annonce CampusLost). Où peut-on se retrouver ?',
-                ),
+        // Ouvre la conversation avec un premier message déjà écrit
+        () => ecrireA(
+              context,
+              ref,
+              annonce: a,
+              texte: 'Bonjour, je crois avoir trouvé votre « ${a.titre} ». '
+                  'Où peut-on se retrouver sur le campus ?',
+            ),
       );
     }
 
@@ -294,20 +331,23 @@ class DetailAnnonceScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _marquerRestituee(BuildContext context, Annonce a) async {
-    final annonces = context.read<AnnonceProvider>();
+  Future<void> _marquerRestituee(
+      BuildContext context, WidgetRef ref, Annonce a) async {
+    final annonces = ref.read(annoncesProvider.notifier);
     final messager = ScaffoldMessenger.of(context);
     final ok = await confirmer(
       context,
-      titre: a.estPerdue ? 'Objet retrouvé ?' : 'Objet restitué ?',
+      titre: a.estPerdue
+          ? 'Vous avez retrouvé votre objet ?'
+          : 'Objet rendu à son propriétaire ?',
       message: "L'annonce sera retirée de l'accueil et rangée dans "
-          '« Mes annonces › Restituées ».',
+          '« Mes annonces › Terminées ».',
       action: 'Confirmer',
     );
     if (!ok) return;
     annonces.marquerRestituee(a.id);
     messager.showSnackBar(
-        const SnackBar(content: Text('Bravo ! Annonce rangée dans « Restituées »')));
+        const SnackBar(content: Text('Bravo ! Annonce rangée dans « Terminées »')));
   }
 
   /// Ouvre la feuille « C'est à moi » (message + détail de preuve).
@@ -330,7 +370,9 @@ class DetailAnnonceScreen extends StatelessWidget {
   /// Grande photo de l'objet sur fond beige, avec le bouton retour
   /// et le badge Perdu / Trouvé / Restitué.
   Widget _photo(BuildContext context, Annonce a) {
-    final badge = a.estRestituee ? 'Restitué' : (a.estPerdue ? 'Perdu' : 'Trouvé');
+    final badge = a.estRestituee
+        ? (a.estPerdue ? 'Retrouvé' : 'Rendu')
+        : (a.estPerdue ? 'Perdu' : 'Trouvé');
     final fondBadge = a.estPerdue ? Colors.white : Couleurs.marron;
     final texteBadge = a.estPerdue ? Couleurs.marron : Colors.white;
 
@@ -356,14 +398,14 @@ class DetailAnnonceScreen extends StatelessWidget {
               ),
             ),
             // Bouton retour (seulement s'il y a un écran précédent)
-            if (Navigator.canPop(context))
+            if (context.canPop())
               Positioned(
                 left: 12,
                 top: 8,
                 child: CircleAvatar(
                   backgroundColor: Colors.white,
                   child: IconButton(
-                    onPressed: () => Navigator.pop(context),
+                    onPressed: () => context.pop(),
                     icon: const Icon(Icons.arrow_back, color: Couleurs.marron),
                     tooltip: 'Retour',
                   ),
@@ -387,6 +429,18 @@ class DetailAnnonceScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Affiché si l'annonce n'existe plus (supprimée entre-temps).
+  Widget _introuvable(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Couleurs.fond,
+      appBar: AppBar(backgroundColor: Couleurs.fond),
+      body: const Center(
+        child: Text("Cette annonce n'existe plus.",
+            style: TextStyle(color: Couleurs.texteDiscret)),
       ),
     );
   }
@@ -475,37 +529,33 @@ class DetailAnnonceScreen extends StatelessWidget {
     );
   }
 
-  /// Pastille ronde cliquable avec une icône de contact.
-  Widget _pastille(IconData icone, String aide, VoidCallback action) {
-    return Tooltip(
-      message: aide,
-      child: Material(
-        color: Couleurs.beigeClair,
-        shape: const CircleBorder(),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: action,
-          child: SizedBox(
-            width: 42,
-            height: 42,
-            child: Icon(icone, size: 20, color: Couleurs.marron),
-          ),
-        ),
+  /// Bouton de contact (Écrire / Appeler) avec une icône et un libellé.
+  Widget _boutonContact(IconData icone, String texte, VoidCallback action) {
+    return OutlinedButton.icon(
+      onPressed: action,
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Couleurs.marron,
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Couleurs.bordure),
+        minimumSize: const Size.fromHeight(48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
+      icon: Icon(icone, size: 20),
+      label: Text(texte, style: const TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }
 
 /// Feuille « C'est à moi » : message et détail de preuve.
-class _FeuilleReclamation extends StatefulWidget {
+class _FeuilleReclamation extends ConsumerStatefulWidget {
   final Annonce annonce;
   const _FeuilleReclamation({required this.annonce});
 
   @override
-  State<_FeuilleReclamation> createState() => _FeuilleReclamationState();
+  ConsumerState<_FeuilleReclamation> createState() => _FeuilleReclamationState();
 }
 
-class _FeuilleReclamationState extends State<_FeuilleReclamation> {
+class _FeuilleReclamationState extends ConsumerState<_FeuilleReclamation> {
   final _formKey = GlobalKey<FormState>();
   final _message = TextEditingController();
   final _detail = TextEditingController();
@@ -519,10 +569,10 @@ class _FeuilleReclamationState extends State<_FeuilleReclamation> {
 
   void _envoyer() {
     if (!_formKey.currentState!.validate()) return;
-    final moi = context.read<AuthProvider>().utilisateur;
+    final moi = ref.read(authProvider);
     if (moi == null) return;
 
-    context.read<ReclamationProvider>().reclamer(
+    ref.read(reclamationsProvider.notifier).reclamer(
           annonceId: widget.annonce.id,
           annonceTitre: widget.annonce.titre,
           demandeurId: moi.id,
@@ -535,7 +585,7 @@ class _FeuilleReclamationState extends State<_FeuilleReclamation> {
     final messager = ScaffoldMessenger.of(context);
     Navigator.pop(context);
     messager.showSnackBar(const SnackBar(
-      content: Text('Réclamation envoyée. Suivez la réponse dans « Réclamations ».'),
+      content: Text('Demande envoyée ! La réponse arrivera dans « Demandes ».'),
     ));
   }
 
@@ -562,51 +612,36 @@ class _FeuilleReclamationState extends State<_FeuilleReclamation> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Le trouveur comparera votre détail avec l\'objet avant de répondre.',
+              "La personne qui l'a trouvé vérifiera votre détail avant de vous répondre.",
               style: TextStyle(color: Couleurs.texteDiscret),
             ),
             const SizedBox(height: 18),
-            TextFormField(
-              controller: _detail,
-              decoration: _style(
-                'Détail de preuve',
-                'Ex. : porte-clés rouge, initiales gravées…',
-              ),
-              validator: (v) => (v == null || v.trim().length < 4)
+            ChampFormulaire(
+              controleur: _detail,
+              libelle: 'Un détail que seul le propriétaire connaît',
+              exemple: 'Ex. : porte-clés rouge, initiales gravées…',
+              icone: Icons.key_outlined,
+              validation: (v) => (v == null || v.trim().length < 4)
                   ? 'Donnez un détail précis'
                   : null,
             ),
             const SizedBox(height: 14),
-            TextFormField(
-              controller: _message,
-              maxLines: 3,
-              decoration: _style('Message (facultatif)',
-                  'Ex. : je l\'ai perdu mardi en sortant du cours…'),
+            ChampFormulaire(
+              controleur: _message,
+              libelle: 'Message',
+              exemple: "Ex. : je l'ai perdu mardi en sortant du cours…",
+              lignes: 3,
+              obligatoire: false,
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
+            BoutonPrincipal(
+              texte: 'Envoyer ma demande',
+              icone: Icons.send_outlined,
               onPressed: _envoyer,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Couleurs.marron,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(52),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-              ),
-              icon: const Icon(Icons.send_outlined),
-              label: const Text('Envoyer la réclamation',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             ),
           ],
         ),
       ),
     );
   }
-
-  InputDecoration _style(String libelle, String exemple) => InputDecoration(
-        labelText: libelle,
-        hintText: exemple,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
 }

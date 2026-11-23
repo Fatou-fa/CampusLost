@@ -1,22 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../providers/auth_provider.dart';
 import '../theme/couleurs.dart';
+import '../widgets/bouton_retour.dart';
+import '../widgets/champs_formulaire.dart';
 
 /// Écran 3 : création d'un compte.
 ///
 /// L'utilisateur ne s'inscrit qu'une seule fois : ensuite, l'application
 /// le garde connecté (voir AuthService).
-class InscriptionScreen extends StatefulWidget {
+class InscriptionScreen extends ConsumerStatefulWidget {
   const InscriptionScreen({super.key});
 
   @override
-  State<InscriptionScreen> createState() => _InscriptionScreenState();
+  ConsumerState<InscriptionScreen> createState() => _InscriptionScreenState();
 }
 
-class _InscriptionScreenState extends State<InscriptionScreen> {
+// ConsumerState : comme State, avec en plus « ref » pour lire les providers
+class _InscriptionScreenState extends ConsumerState<InscriptionScreen> {
+  bool _enCours = false; // vrai pendant l'enregistrement
+
   // Clé du formulaire : permet de lancer la validation de tous les champs
   final _formKey = GlobalKey<FormState>();
 
@@ -42,8 +48,8 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   Future<void> _creerCompte() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final auth = context.read<AuthProvider>();
-    final reussi = await auth.inscrire(
+    setState(() => _enCours = true);
+    final erreur = await ref.read(authProvider.notifier).inscrire(
       nom: _nom.text.trim(),
       prenom: _prenom.text.trim(),
       email: _email.text.trim(),
@@ -51,107 +57,143 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
       motDePasse: _motDePasse.text,
     );
     if (!mounted) return; // l'écran a pu être fermé pendant l'attente
+    setState(() => _enCours = false);
 
-    if (reussi) {
-      // On vide la pile : le bouton retour ne ramène pas à l'inscription
-      Navigator.pushNamedAndRemoveUntil(context, Routes.accueil, (_) => false);
+    if (erreur == null) {
+      // go : remplace toute la pile, le retour ne ramène pas à l'inscription
+      context.go(Routes.accueil);
     } else {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(auth.erreur ?? 'Erreur')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(erreur)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Vrai pendant l'enregistrement : on désactive le bouton
-    final enCours = context.watch<AuthProvider>().enCours;
-
     return Scaffold(
       backgroundColor: Couleurs.fond,
+      // Même présentation que l'écran de connexion de Gilbert
+      // Flèche de retour vers l'écran de bienvenue
       appBar: AppBar(
         backgroundColor: Couleurs.fond,
-        title: const Text(
-          'Créer un compte',
-          style: TextStyle(
-            color: Couleurs.marronFonce,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        elevation: 0,
+        leading: const BoutonRetour(),
       ),
       // SingleChildScrollView : le formulaire défile quand le clavier s'ouvre
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
-                "Une seule fois : ensuite, l'application vous garde connecté(e).",
-                style: TextStyle(color: Couleurs.texteDiscret),
+              // Logo carré marron foncé
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Couleurs.marronFonce,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.person_add_alt_1_rounded,
+                      color: Couleurs.beige, size: 34),
+                ),
               ),
               const SizedBox(height: 24),
+              const Text(
+                'Créer un compte',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: Couleurs.texte,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Une seule fois : ensuite, l'application vous garde connecté(e).",
+                style: TextStyle(fontSize: 15, color: Couleurs.texteDiscret, height: 1.4),
+              ),
+              const SizedBox(height: 28),
 
               // Prénom et nom côte à côte
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(child: _champ(_prenom, 'Prénom', 'Awa')),
+                  Expanded(
+                    child: ChampFormulaire(
+                      controleur: _prenom,
+                      libelle: 'Prénom',
+                      exemple: 'Awa',
+                    ),
+                  ),
                   const SizedBox(width: 12),
-                  Expanded(child: _champ(_nom, 'Nom', 'Ndiaye')),
+                  Expanded(
+                    child: ChampFormulaire(
+                      controleur: _nom,
+                      libelle: 'Nom',
+                      exemple: 'Ndiaye',
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 16),
-              _champ(_telephone, 'Téléphone', '77 000 00 00',
-                  clavier: TextInputType.phone, validation: _verifierTelephone),
-              const SizedBox(height: 16),
-              _champ(_email, 'Email', 'prenom.nom@ugb.edu.sn',
-                  clavier: TextInputType.emailAddress,
-                  validation: _verifierEmail),
-              const SizedBox(height: 16),
-              _champ(_motDePasse, 'Mot de passe', '6 caractères minimum',
-                  cache: true, validation: _verifierMotDePasse),
-              const SizedBox(height: 32),
-
-              // Bouton principal
-              ElevatedButton(
-                onPressed: enCours ? null : _creerCompte,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Couleurs.marron,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: enCours
-                    ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.5, color: Colors.white),
-                      )
-                    : const Text(
-                        'Créer mon compte',
-                        style: TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w600),
-                      ),
+              const SizedBox(height: 18),
+              ChampFormulaire(
+                controleur: _telephone,
+                libelle: 'Téléphone',
+                exemple: '77 000 00 00',
+                icone: Icons.phone_outlined,
+                clavier: TextInputType.phone,
+                validation: _verifierTelephone,
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
+              ChampFormulaire(
+                controleur: _email,
+                libelle: 'Email',
+                exemple: 'prenom.nom@ugb.edu.sn',
+                icone: Icons.mail_outline,
+                clavier: TextInputType.emailAddress,
+                validation: _verifierEmail,
+              ),
+              const SizedBox(height: 18),
+              ChampFormulaire(
+                controleur: _motDePasse,
+                libelle: 'Mot de passe',
+                exemple: '6 caractères minimum',
+                icone: Icons.lock_outline,
+                cache: true,
+                validation: _verifierMotDePasse,
+              ),
+              const SizedBox(height: 28),
+
+              BoutonPrincipal(
+                texte: 'Créer mon compte',
+                onPressed: _creerCompte,
+                enCours: _enCours,
+              ),
+              const SizedBox(height: 12),
 
               // Lien vers la connexion pour ceux qui ont déjà un compte
               TextButton(
-                onPressed: () =>
-                    Navigator.pushReplacementNamed(context, Routes.connexion),
+                onPressed: () => context.pushReplacement(Routes.connexion),
                 child: const Text(
                   "J'ai déjà un compte",
-                  style: TextStyle(color: Couleurs.marron),
+                  style: TextStyle(color: Couleurs.marron, fontWeight: FontWeight.w600),
                 ),
               ),
-              const Text(
-                "Votre numéro n'est visible que des utilisateurs connectés.",
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: Couleurs.texteDiscret),
+              const SizedBox(height: 4),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.lock_outline, size: 16, color: Couleurs.texteDiscret),
+                  SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      "Votre numéro n'est jamais affiché dans l'application.",
+                      style: TextStyle(fontSize: 12, color: Couleurs.texteDiscret),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -176,33 +218,5 @@ class _InscriptionScreenState extends State<InscriptionScreen> {
   String? _verifierMotDePasse(String? valeur) {
     if (valeur == null || valeur.length < 6) return '6 caractères minimum';
     return null;
-  }
-
-  /// Crée un champ de saisie avec son libellé.
-  /// [cache] masque le texte (mot de passe), [clavier] choisit le type de
-  /// clavier, [validation] vérifie la valeur (par défaut : champ obligatoire).
-  Widget _champ(
-    TextEditingController controleur,
-    String libelle,
-    String exemple, {
-    bool cache = false,
-    TextInputType clavier = TextInputType.text,
-    String? Function(String?)? validation,
-  }) {
-    return TextFormField(
-      controller: controleur,
-      obscureText: cache,
-      keyboardType: clavier,
-      validator: validation ??
-          (valeur) =>
-              (valeur == null || valeur.trim().isEmpty) ? 'Obligatoire' : null,
-      decoration: InputDecoration(
-        labelText: libelle,
-        hintText: exemple,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
   }
 }

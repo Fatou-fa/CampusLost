@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../theme/couleurs.dart';
@@ -57,7 +58,7 @@ class ChoixTypeScreen extends StatelessWidget {
   /// Ouvre le formulaire en remplaçant cet écran : après la publication,
   /// le retour ramène directement à l'accueil.
   void _ouvrirFormulaire(BuildContext context, String type) {
-    Navigator.pushReplacementNamed(context, Routes.formulaire, arguments: type);
+    context.pushReplacement(Routes.formulaire(type));
   }
 
   /// En-tête marron avec des objets dessinés qui « flottent » à droite.
@@ -106,7 +107,7 @@ class ChoixTypeScreen extends StatelessWidget {
                 left: 8,
                 top: 4,
                 child: IconButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () => context.pop(),
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   tooltip: 'Retour',
                 ),

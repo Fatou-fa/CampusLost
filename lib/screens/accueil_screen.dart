@@ -1,27 +1,32 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../config/categories.dart';
 import '../config/routes.dart';
 import '../providers/annonce_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/message_provider.dart';
 import '../theme/couleurs.dart';
 import '../widgets/annonce_card.dart';
 import '../widgets/barre_laterale.dart';
 
 /// Écran d'accueil : recherche, catégories et annonces récentes.
 ///
-/// Les annonces viennent de [AnnonceProvider] et le prénom affiché de
-/// [AuthProvider]. Navigation : appui sur une annonce (détail) et appui sur
+/// Les annonces viennent de resultatsProvider et le prénom affiché de
+/// authProvider (Riverpod). Navigation : appui sur une annonce (détail) et appui sur
 /// le logo (barre latérale). Le bouton « + » est dans la barre du bas.
-class AccueilScreen extends StatelessWidget {
+class AccueilScreen extends ConsumerWidget {
   const AccueilScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // watch : l'écran se redessine quand la liste ou la recherche change
-    final annonces = context.watch<AnnonceProvider>();
-    final resultats = annonces.resultats;
-    final prenom = context.watch<AuthProvider>().utilisateur?.prenom ?? '';
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ref.watch : l'écran se redessine quand la liste, la recherche ou la
+    // catégorie change
+    final resultats = ref.watch(resultatsProvider);
+    final categorie = ref.watch(categorieProvider);
+    final prenom = ref.watch(authProvider)?.prenom ?? '';
+    final messagesNonLus = ref.watch(nbMessagesNonLusProvider);
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
@@ -31,20 +36,20 @@ class AccueilScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.zero,
         children: [
-          _enTete(context, prenom),
+          _enTete(context, ref, prenom, messagesNonLus),
           const SizedBox(height: 20),
           _titreSection('Catégories'),
           const SizedBox(height: 12),
-          _listeCategories(annonces),
+          _listeCategories(ref, categorie),
           const SizedBox(height: 24),
-          _titreSection(annonces.categorie ?? 'Annonces récentes',
+          _titreSection(categorie ?? 'Annonces récentes',
               detail: '${resultats.length} annonces'),
           // Lien pour revenir à la liste globale quand un filtre est actif
-          if (annonces.categorie != null)
+          if (categorie != null)
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: annonces.afficherTout,
+                onPressed: () => ref.read(categorieProvider.notifier).state = null,
                 icon: const Icon(Icons.close, size: 18),
                 label: const Text('Voir toutes les annonces'),
                 style: TextButton.styleFrom(
@@ -72,8 +77,7 @@ class AccueilScreen extends StatelessWidget {
                 child: AnnonceCard(
                   annonce: annonce,
                   // Ouvre le détail en lui passant l'annonce choisie
-                  onTap: () => Navigator.pushNamed(context, Routes.detail,
-                      arguments: annonce),
+                  onTap: () => context.push(Routes.detail(annonce.id)),
                 ),
               ),
           const SizedBox(height: 24),
@@ -84,7 +88,8 @@ class AccueilScreen extends StatelessWidget {
   }
 
   /// En-tête marron arrondi : logo, salutation, déconnexion et recherche.
-  Widget _enTete(BuildContext context, String prenom) {
+  Widget _enTete(
+      BuildContext context, WidgetRef ref, String prenom, int messagesNonLus) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
       decoration: const BoxDecoration(
@@ -120,12 +125,26 @@ class AccueilScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Bonjour ${_majuscule(prenom)}',
-                  style: const TextStyle(
-                    color: Color(0xFFEADCC4),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    'Bonjour ${_majuscule(prenom)}',
+                    style: const TextStyle(
+                      color: Color(0xFFEADCC4),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                // Messages : icône avec le nombre de messages non lus
+                IconButton(
+                  tooltip: 'Messages',
+                  onPressed: () => context.push(Routes.messages),
+                  icon: Badge(
+                    isLabelVisible: messagesNonLus > 0,
+                    label: Text('$messagesNonLus'),
+                    backgroundColor: const Color(0xFFC8553D),
+                    child: const Icon(Icons.chat_bubble_outline,
+                        color: Colors.white, size: 26),
                   ),
                 ),
               ],
@@ -137,7 +156,7 @@ class AccueilScreen extends StatelessWidget {
             // Barre de recherche
             TextField(
               onChanged: (texte) =>
-                  context.read<AnnonceProvider>().rechercher(texte),
+                  ref.read(rechercheProvider.notifier).state = texte,
               decoration: InputDecoration(
                 hintText: 'Rechercher un objet…',
                 prefixIcon: const Icon(Icons.search, color: Couleurs.marron),
@@ -208,10 +227,10 @@ class AccueilScreen extends StatelessWidget {
   /// Catégories affichées en grille : si elles ne tiennent pas sur une ligne,
   /// elles passent à la ligne suivante (Wrap), sans défilement horizontal.
   /// La première tuile, « Toutes », affiche la liste globale des annonces.
-  /// [annonces] est le provider déjà lu dans build() (on n'utilise pas
-  /// context.read ici, interdit pendant la construction de l'écran).
-  Widget _listeCategories(AnnonceProvider annonces) {
-    final choisie = annonces.categorie; // null = toutes
+  /// [choisie] est la catégorie sélectionnée (null = toutes).
+  Widget _listeCategories(WidgetRef ref, String? choisie) {
+    // Modifier un StateProvider (dans un onTap) :
+    //   ref.read(categorieProvider.notifier).state = nouvelle valeur
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -225,15 +244,17 @@ class AccueilScreen extends StatelessWidget {
             icone: const Icon(Icons.apps_rounded,
                 size: 40, color: Couleurs.marron),
             estChoisie: choisie == null,
-            onTap: annonces.afficherTout,
+            onTap: () => ref.read(categorieProvider.notifier).state = null,
           ),
           // Une tuile par catégorie
-          for (final categorie in AnnonceProvider.categories)
+          for (final categorie in Categories.liste)
             _tuile(
               libelle: categorie[0],
               icone: Image.asset(categorie[1], fit: BoxFit.contain),
               estChoisie: categorie[0] == choisie,
-              onTap: () => annonces.choisirCategorie(categorie[0]),
+              // Second appui sur la catégorie choisie : retire le filtre
+              onTap: () => ref.read(categorieProvider.notifier).state =
+                  categorie[0] == choisie ? null : categorie[0],
             ),
         ],
       ),

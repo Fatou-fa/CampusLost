@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'config/routes.dart';
-import 'providers/annonce_provider.dart';
 import 'providers/auth_provider.dart';
-import 'providers/reclamation_provider.dart';
+import 'services/auth_service.dart';
 import 'theme/couleurs.dart';
 
 /// Point d'entrée de CampusLost.
@@ -17,32 +16,26 @@ Future<void> main() async {
   // Obligatoire avant d'utiliser un plugin (SharedPreferences) dans main()
   WidgetsFlutterBinding.ensureInitialized();
 
-  final auth = AuthProvider();
-  await auth.chargerSession();
+  final utilisateur = await AuthService().chargerSession();
 
   runApp(
-    // MultiProvider rend les providers accessibles à tous les écrans
-    MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: auth),
-        ChangeNotifierProvider(create: (_) => AnnonceProvider()),
-        ChangeNotifierProvider(create: (_) => ReclamationProvider()),
-      ],
-      child: CampusLostApp(dejaConnecte: auth.estConnecte),
+    // ProviderScope : obligatoire avec Riverpod, il contient tous les providers.
+    // overrideWithValue donne à Riverpod la session lue sur le téléphone.
+    ProviderScope(
+      overrides: [utilisateurInitialProvider.overrideWithValue(utilisateur)],
+      child: const CampusLostApp(),
     ),
   );
 }
 
 /// Racine de l'application CampusLost.
-class CampusLostApp extends StatelessWidget {
-  /// Vrai si une session existe déjà sur le téléphone (lu dans main).
-  final bool dejaConnecte;
-
-  const CampusLostApp({super.key, this.dejaConnecte = false});
+/// ConsumerWidget : un widget qui peut lire les providers avec « ref ».
+class CampusLostApp extends ConsumerWidget {
+  const CampusLostApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    return MaterialApp.router(
       title: 'CampusLost',
       debugShowCheckedModeBanner: false, // retire le bandeau « DEBUG »
       theme: ThemeData(
@@ -50,10 +43,18 @@ class CampusLostApp extends StatelessWidget {
         useMaterial3: true,
         // Messages flottants, au-dessus de la barre du bas
         snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+        // Transitions « iOS » sur tous les téléphones : l'écran glisse depuis
+        // la droite, et on peut revenir en arrière en faisant glisser son doigt
+        // du bord gauche vers la droite (en plus des boutons de retour).
+        pageTransitionsTheme: const PageTransitionsTheme(
+          builders: {
+            TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+            TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+          },
+        ),
       ),
-      // Premier écran selon la session, puis navigation par nom (Routes)
-      initialRoute: dejaConnecte ? Routes.accueil : Routes.bienvenue,
-      onGenerateRoute: Routes.generer,
+      // go_router gère toute la navigation
+      routerConfig: ref.watch(routerProvider),
     );
   }
 }

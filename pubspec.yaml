@@ -39,8 +39,10 @@ dependencies:
   # Appeler, envoyer un SMS ou un message WhatsApp
   url_launcher: ^6.3.1
 
-  # Partage de l'état (connexion, annonces) entre les écrans
-  provider: ^6.1.2
+  # Gestion de l'état (connexion, annonces, réclamations) — demandé par le prof
+  flutter_riverpod: 2.6.1
+  # Navigation entre les écrans par adresse (/accueil, /annonce/3…) — demandé par le prof
+  go_router: 14.6.2
   # Mémorise la session sur le téléphone (connexion unique)
   shared_preferences: ^2.3.2
 

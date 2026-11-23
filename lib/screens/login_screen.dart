@@ -1,20 +1,23 @@
 import 'package:campuslost/config/routes.dart';
 import 'package:campuslost/providers/auth_provider.dart';
 import 'package:campuslost/theme/couleurs.dart';
+import 'package:campuslost/widgets/bouton_retour.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final formKey = GlobalKey<FormState>();
   final email = TextEditingController();
   final password = TextEditingController();
+  bool _masque = true; // mot de passe caché (bouton œil pour l'afficher)
 
   @override
   void dispose() {
@@ -27,16 +30,16 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _seConnecter() async {
     if (!formKey.currentState!.validate()) return;
 
-    final auth = context.read<AuthProvider>();
-    final reussi = await auth.connecter(email.text, password.text);
+    final erreur =
+        await ref.read(authProvider.notifier).connecter(email.text, password.text);
     if (!mounted) return;
 
-    if (reussi) {
-      // Pile vidée : le retour ne ramène pas à la connexion
-      Navigator.pushNamedAndRemoveUntil(context, Routes.accueil, (_) => false);
+    if (erreur == null) {
+      // go : pile vidée : le retour ne ramène pas à la connexion
+      context.go(Routes.accueil);
     } else {
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(auth.erreur ?? 'Erreur')));
+          .showSnackBar(SnackBar(content: Text(erreur)));
     }
   }
 
@@ -60,7 +63,7 @@ class _LoginScreenState extends State<LoginScreen> {
           TextButton(
             onPressed: () {
               Navigator.pop(dialogue);
-              Navigator.pushReplacementNamed(context, Routes.inscription);
+              context.pushReplacement(Routes.inscription);
             },
             child: const Text('Créer un compte'),
           ),
@@ -73,9 +76,15 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Couleurs.fond,
+      // Flèche de retour vers l'écran de bienvenue
+      appBar: AppBar(
+        backgroundColor: Couleurs.fond,
+        elevation: 0,
+        leading: const BoutonRetour(),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
           child: Form(
             key: formKey,
             child: Column(
@@ -179,9 +188,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: password,
-                  obscureText: true,
+                  obscureText: _masque,
                   decoration: InputDecoration(
                     hintText: '••••••••',
+                    // Bouton œil : affiche ou masque le mot de passe
+                    suffixIcon: IconButton(
+                      tooltip: _masque ? 'Afficher' : 'Masquer',
+                      onPressed: () => setState(() => _masque = !_masque),
+                      icon: Icon(
+                        _masque
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
+                        color: Couleurs.texteDiscret,
+                      ),
+                    ),
                     hintStyle: TextStyle(
                       color: Couleurs.texteDiscret.withValues(alpha: 0.6),
                     ),
@@ -257,7 +277,29 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 8),
+                // Lien vers l'inscription pour ceux qui n'ont pas de compte
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.pushReplacement(Routes.inscription),
+                    child: const Text.rich(
+                      TextSpan(
+                        text: 'Pas encore de compte ? ',
+                        style: TextStyle(color: Couleurs.texteDiscret),
+                        children: [
+                          TextSpan(
+                            text: 'Créer un compte',
+                            style: TextStyle(
+                              color: Couleurs.marron,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 // Mention de session persistante en bas
                 const Row(
                   children: [

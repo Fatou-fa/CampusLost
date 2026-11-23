@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../models/reclamation_model.dart';
 import '../providers/annonce_provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/reclamation_provider.dart';
 import '../theme/couleurs.dart';
 import '../utils/actions.dart';
@@ -14,14 +14,14 @@ import '../utils/actions.dart';
 ///  - Reçues : les personnes qui disent être propriétaires d'un objet que
 ///    j'ai publié. Je compare le détail donné, puis j'accepte ou je refuse.
 ///  - Envoyées : mes propres demandes et leur réponse.
-class ReclamationsScreen extends StatefulWidget {
+class ReclamationsScreen extends ConsumerStatefulWidget {
   const ReclamationsScreen({super.key});
 
   @override
-  State<ReclamationsScreen> createState() => _ReclamationsScreenState();
+  ConsumerState<ReclamationsScreen> createState() => _ReclamationsScreenState();
 }
 
-class _ReclamationsScreenState extends State<ReclamationsScreen> {
+class _ReclamationsScreenState extends ConsumerState<ReclamationsScreen> {
   int _ongletActif = 0; // 0 = Reçues, 1 = Envoyées
 
   // Couleurs des statuts
@@ -32,15 +32,9 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final moi = context.watch<AuthProvider>().utilisateur;
-    final annonces = context.watch<AnnonceProvider>();
-    final provider = context.watch<ReclamationProvider>();
-
-    final mesIds = moi == null
-        ? <int>[]
-        : annonces.deAuteur(moi.id).map((a) => a.id).toList();
-    final recues = provider.recues(mesIds);
-    final envoyees = moi == null ? <Reclamation>[] : provider.envoyees(moi.id);
+    // Listes calculées par Riverpod (voir reclamation_provider.dart)
+    final recues = ref.watch(reclamationsRecuesProvider);
+    final envoyees = ref.watch(reclamationsEnvoyeesProvider);
     final affichees = _ongletActif == 0 ? recues : envoyees;
     final enAttente = recues.where((r) => r.estEnAttente).length;
 
@@ -53,7 +47,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Réclamations',
+                'Demandes',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.bold,
@@ -63,8 +57,9 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
               const SizedBox(height: 6),
               Text(
                 _ongletActif == 0
-                    ? 'Les demandes reçues sur les objets que vous avez publiés.'
-                    : 'Les objets que vous avez réclamés.',
+                    ? 'Des personnes pensent que les objets que vous avez '
+                        'trouvés sont à elles. Vérifiez leur détail, puis répondez.'
+                    : "Les objets que vous avez demandé à récupérer, et la réponse.",
                 style: const TextStyle(
                   fontSize: 14,
                   color: Couleurs.texteDiscret,
@@ -85,7 +80,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
                     _onglet(0, enAttente > 0
                         ? 'Reçues ($enAttente à traiter)'
                         : 'Reçues (${recues.length})'),
-                    _onglet(1, 'Envoyées (${envoyees.length})'),
+                    _onglet(1, 'Mes demandes (${envoyees.length})'),
                   ],
                 ),
               ),
@@ -99,8 +94,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
                         itemCount: affichees.length,
                         separatorBuilder: (_, _) => const SizedBox(height: 16),
                         itemBuilder: (context, index) =>
-                            _carte(affichees[index], annonces,
-                            recue: _ongletActif == 0),
+                            _carte(affichees[index], recue: _ongletActif == 0),
                       ),
               ),
             ],
@@ -145,10 +139,10 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
           const SizedBox(height: 12),
           Text(
             _ongletActif == 0
-                ? 'Aucune réclamation reçue.\nElles arrivent ici quand quelqu\'un '
-                    'reconnaît un objet que vous avez trouvé.'
-                : "Vous n'avez rien réclamé.\nOuvrez une annonce « Trouvé » et "
-                    "touchez « C'est à moi ».",
+                ? "Aucune demande pour l'instant.\nElles arrivent ici quand "
+                    "quelqu'un reconnaît un objet que vous avez trouvé."
+                : "Vous n'avez rien demandé.\nVous reconnaissez un objet ? "
+                    "Ouvrez son annonce et touchez « C'est à moi ».",
             textAlign: TextAlign.center,
             style: const TextStyle(color: Couleurs.texteDiscret, height: 1.4),
           ),
@@ -158,7 +152,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
   }
 
   /// Carte d'une réclamation. [recue] : vrai pour l'onglet « Reçues ».
-  Widget _carte(Reclamation r, AnnonceProvider annonces,
+  Widget _carte(Reclamation r,
       {required bool recue}) {
     // Badge selon le statut
     final String badge;
@@ -179,8 +173,7 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
     }
 
     // Reçue : on voit le demandeur. Envoyée : on voit l'auteur de l'annonce.
-    // (provider déjà lu dans build : context.read est interdit pendant build)
-    final annonce = annonces.parId(r.annonceId);
+    final annonce = ref.watch(annonceParIdProvider(r.annonceId));
     final nom = recue ? r.demandeurNom : (annonce?.auteurNom ?? 'Annonce supprimée');
     final telephone = recue ? r.demandeurTelephone : (annonce?.auteurTelephone ?? '');
 
@@ -332,29 +325,34 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
                 // Voir l'annonce concernée
                 if (annonce != null)
                   TextButton.icon(
-                    onPressed: () => Navigator.pushNamed(context, Routes.detail,
-                        arguments: annonce),
+                    onPressed: () => context.push(Routes.detail(annonce.id)),
                     style: TextButton.styleFrom(foregroundColor: Couleurs.marron),
                     icon: const Icon(Icons.visibility_outlined, size: 18),
                     label: const Text("Voir l'annonce"),
                   ),
                 const Spacer(),
-                // Une fois acceptée : on se contacte pour la remise de l'objet
-                if (r.estAcceptee && telephone.isNotEmpty) ...[
+                // Une fois acceptée : on se contacte pour la remise de
+                // l'objet, en écrivant dans l'app OU en appelant
+                if (r.estAcceptee && annonce != null) ...[
                   IconButton.filledTonal(
-                    tooltip: 'Appeler',
-                    onPressed: () => appeler(context, telephone),
-                    icon: const Icon(Icons.phone_outlined),
-                  ),
-                  IconButton.filledTonal(
-                    tooltip: 'Message',
-                    onPressed: () => envoyerMessage(
+                    tooltip: 'Écrire',
+                    onPressed: () => ecrireA(
                       context,
-                      telephone,
-                      'Bonjour, je vous contacte via CampusLost pour « ${r.annonceTitre} ».',
+                      ref,
+                      annonce: annonce,
+                      // Reçue : j'ai publié l'annonce, j'écris au demandeur
+                      interlocuteurId: recue ? r.demandeurId : null,
+                      interlocuteurNom: r.demandeurNom,
+                      interlocuteurTelephone: r.demandeurTelephone,
                     ),
-                    icon: const Icon(Icons.chat_outlined),
+                    icon: const Icon(Icons.chat_bubble_outline),
                   ),
+                  if (telephone.isNotEmpty)
+                    IconButton.filledTonal(
+                      tooltip: 'Appeler',
+                      onPressed: () => appeler(context, telephone),
+                      icon: const Icon(Icons.phone_outlined),
+                    ),
                 ],
               ],
             ),
@@ -364,30 +362,30 @@ class _ReclamationsScreenState extends State<ReclamationsScreen> {
   }
 
   Future<void> _accepter(Reclamation r) async {
-    final reclamations = context.read<ReclamationProvider>();
-    final annonces = context.read<AnnonceProvider>();
+    final reclamations = ref.read(reclamationsProvider.notifier);
+    final annonces = ref.read(annoncesProvider.notifier);
     final messager = ScaffoldMessenger.of(context);
     final ok = await confirmer(
       context,
-      titre: 'Accepter la réclamation ?',
-      message: '${r.demandeurNom} sera reconnu(e) comme propriétaire de '
-          '« ${r.annonceTitre} ». L\'annonce passera dans « Restituées » '
-          'et les autres demandes seront refusées.',
-      action: 'Accepter',
+      titre: "C'est bien à ${r.demandeurNom} ?",
+      message: 'Vous confirmez que « ${r.annonceTitre} » appartient à '
+          '${r.demandeurNom}. Vous pourrez ensuite l\'appeler pour lui rendre '
+          "l'objet. Les autres demandes sur cet objet seront refusées.",
+      action: 'Oui, accepter',
     );
     if (!ok) return;
     reclamations.accepter(r.id);
     annonces.marquerRestituee(r.annonceId);
     messager.showSnackBar(SnackBar(
-      content: Text('Contactez ${r.demandeurNom} pour lui remettre l\'objet'),
+      content: Text('Appelez ${r.demandeurNom} pour lui rendre l\'objet'),
     ));
   }
 
   Future<void> _refuser(Reclamation r) async {
-    final reclamations = context.read<ReclamationProvider>();
+    final reclamations = ref.read(reclamationsProvider.notifier);
     final ok = await confirmer(
       context,
-      titre: 'Refuser la réclamation ?',
+      titre: 'Refuser cette demande ?',
       message: 'Le détail donné par ${r.demandeurNom} ne correspond pas à l\'objet ?',
       action: 'Refuser',
       danger: true,

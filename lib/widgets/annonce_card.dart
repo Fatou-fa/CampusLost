@@ -73,8 +73,9 @@ class AnnonceCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: Text(
+                        // Mots simples : Perdu, Trouvé, puis Retrouvé / Rendu
                         annonce.estRestituee
-                            ? 'Restitué'
+                            ? (annonce.estPerdue ? 'Retrouvé' : 'Rendu')
                             : (annonce.estPerdue ? 'Perdu' : 'Trouvé'),
                         style: TextStyle(
                           fontSize: 12,

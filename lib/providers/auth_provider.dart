@@ -1,33 +1,32 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/utilisateur_model.dart';
 import '../services/auth_service.dart';
 
-/// État de connexion partagé par toute l'application.
+/// Utilisateur lu sur le téléphone au démarrage (dans main.dart).
+/// Il est fourni à Riverpod avec `overrideWithValue` dans le ProviderScope.
+final utilisateurInitialProvider = Provider<Utilisateur?>((ref) => null);
+
+/// Service qui gère le compte (stockage local, plus tard l'API PHP).
+final authServiceProvider = Provider<AuthService>((ref) => AuthService());
+
+/// Utilisateur connecté (null = personne n'est connecté).
 ///
-/// Les écrans le lisent avec `context.watch<AuthProvider>()` (pour se
-/// redessiner quand il change) ou `context.read<AuthProvider>()` (pour
-/// appeler une action, par exemple dans un bouton).
-class AuthProvider extends ChangeNotifier {
-  final AuthService _service = AuthService();
+/// Lecture dans un écran :      ref.watch(authProvider)
+/// Appel d'une action :         ref.read(authProvider.notifier).connecter(...)
+final authProvider =
+    NotifierProvider<AuthNotifier, Utilisateur?>(AuthNotifier.new);
 
-  Utilisateur? _utilisateur;
-  bool _enCours = false;
-  String? _erreur;
+/// Les actions sur la session. Chaque action retourne null si tout s'est
+/// bien passé, sinon le message d'erreur à afficher.
+class AuthNotifier extends Notifier<Utilisateur?> {
+  AuthService get _service => ref.read(authServiceProvider);
 
-  Utilisateur? get utilisateur => _utilisateur;
-  bool get estConnecte => _utilisateur != null;
-  bool get enCours => _enCours; // pour afficher un indicateur de chargement
-  String? get erreur => _erreur;
+  /// Valeur de départ : la session trouvée au lancement de l'application.
+  @override
+  Utilisateur? build() => ref.read(utilisateurInitialProvider);
 
-  /// Au démarrage : récupère l'utilisateur mémorisé sur le téléphone.
-  Future<void> chargerSession() async {
-    _utilisateur = await _service.chargerSession();
-    notifyListeners();
-  }
-
-  /// Retourne true si l'inscription a réussi.
-  Future<bool> inscrire({
+  Future<String?> inscrire({
     required String nom,
     required String prenom,
     required String email,
@@ -43,13 +42,11 @@ class AuthProvider extends ChangeNotifier {
         ));
   }
 
-  /// Retourne true si la connexion a réussi ; sinon [erreur] contient le message.
-  Future<bool> connecter(String email, String motDePasse) {
+  Future<String?> connecter(String email, String motDePasse) {
     return _executer(() => _service.connecter(email, motDePasse));
   }
 
-  /// Retourne true si la modification du profil a réussi.
-  Future<bool> modifierProfil({
+  Future<String?> modifierProfil({
     required String nom,
     required String prenom,
     required String telephone,
@@ -63,24 +60,16 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> deconnecter() async {
     await _service.deconnecter();
-    _utilisateur = null;
-    notifyListeners();
+    state = null; // tous les écrans qui « watch » authProvider se redessinent
   }
 
-  /// Lance une action d'authentification en gérant le chargement et l'erreur.
-  Future<bool> _executer(Future<Utilisateur> Function() action) async {
-    _enCours = true;
-    _erreur = null;
-    notifyListeners();
+  /// Lance une action ; en cas de succès, le nouvel utilisateur devient l'état.
+  Future<String?> _executer(Future<Utilisateur> Function() action) async {
     try {
-      _utilisateur = await action();
-      return true;
+      state = await action();
+      return null;
     } catch (e) {
-      _erreur = e.toString().replaceFirst('Exception: ', '');
-      return false;
-    } finally {
-      _enCours = false;
-      notifyListeners();
+      return e.toString().replaceFirst('Exception: ', '');
     }
   }
 }

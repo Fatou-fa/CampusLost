@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../providers/auth_provider.dart';
 import '../theme/couleurs.dart';
+import '../widgets/champs_formulaire.dart';
 
 /// Modification du prénom, du nom et du téléphone.
 /// L'email sert d'identifiant : il n'est pas modifiable.
-class ModifierProfilScreen extends StatefulWidget {
+class ModifierProfilScreen extends ConsumerStatefulWidget {
   const ModifierProfilScreen({super.key});
 
   @override
-  State<ModifierProfilScreen> createState() => _ModifierProfilScreenState();
+  ConsumerState<ModifierProfilScreen> createState() =>
+      _ModifierProfilScreenState();
 }
 
-class _ModifierProfilScreenState extends State<ModifierProfilScreen> {
+class _ModifierProfilScreenState extends ConsumerState<ModifierProfilScreen> {
+  bool _enCours = false;
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _prenom;
   late final TextEditingController _nom;
@@ -23,7 +27,7 @@ class _ModifierProfilScreenState extends State<ModifierProfilScreen> {
   void initState() {
     super.initState();
     // Les champs sont pré-remplis avec les informations actuelles
-    final moi = context.read<AuthProvider>().utilisateur;
+    final moi = ref.read(authProvider);
     _prenom = TextEditingController(text: moi?.prenom ?? '');
     _nom = TextEditingController(text: moi?.nom ?? '');
     _telephone = TextEditingController(text: moi?.telephone ?? '');
@@ -39,25 +43,26 @@ class _ModifierProfilScreenState extends State<ModifierProfilScreen> {
 
   Future<void> _enregistrer() async {
     if (!_formKey.currentState!.validate()) return;
-    final auth = context.read<AuthProvider>();
-    final reussi = await auth.modifierProfil(
+    setState(() => _enCours = true);
+    final erreur = await ref.read(authProvider.notifier).modifierProfil(
       nom: _nom.text.trim(),
       prenom: _prenom.text.trim(),
       telephone: _telephone.text.replaceAll(' ', ''),
     );
     if (!mounted) return;
+    setState(() => _enCours = false);
     final messager = ScaffoldMessenger.of(context);
-    if (reussi) {
-      Navigator.pop(context);
+    if (erreur == null) {
+      context.pop();
       messager.showSnackBar(const SnackBar(content: Text('Profil mis à jour')));
     } else {
-      messager.showSnackBar(SnackBar(content: Text(auth.erreur ?? 'Erreur')));
+      messager.showSnackBar(SnackBar(content: Text(erreur)));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
+    final moi = ref.watch(authProvider);
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
@@ -69,67 +74,59 @@ class _ModifierProfilScreenState extends State<ModifierProfilScreen> {
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _champ(_prenom, 'Prénom'),
-              const SizedBox(height: 16),
-              _champ(_nom, 'Nom'),
-              const SizedBox(height: 16),
-              _champ(
-                _telephone,
-                'Téléphone',
-                clavier: TextInputType.phone,
-                validation: (v) => (v ?? '').replaceAll(' ', '').length == 9
-                    ? null
-                    : 'Numéro à 9 chiffres',
+              SectionFormulaire(
+                titre: 'Mes informations',
+                icone: Icons.person_outline,
+                children: [
+                  ChampFormulaire(
+                    controleur: _prenom,
+                    libelle: 'Prénom',
+                    icone: Icons.badge_outlined,
+                  ),
+                  const SizedBox(height: 16),
+                  ChampFormulaire(
+                    controleur: _nom,
+                    libelle: 'Nom',
+                    icone: Icons.badge_outlined,
+                  ),
+                  const SizedBox(height: 16),
+                  ChampFormulaire(
+                    controleur: _telephone,
+                    libelle: 'Téléphone',
+                    icone: Icons.phone_outlined,
+                    clavier: TextInputType.phone,
+                    validation: (v) => (v ?? '').replaceAll(' ', '').length == 9
+                        ? null
+                        : 'Numéro à 9 chiffres',
+                  ),
+                  const SizedBox(height: 16),
+                  // Email affiché mais non modifiable (c'est l'identifiant)
+                  ChampFormulaire(
+                    libelle: 'Email (non modifiable)',
+                    valeurInitiale: moi?.email ?? '',
+                    icone: Icons.mail_outline,
+                    actif: false,
+                    obligatoire: false,
+                  ),
+                ],
               ),
-              const SizedBox(height: 16),
-              // Email affiché mais non modifiable
-              TextFormField(
-                initialValue: auth.utilisateur?.email ?? '',
-                enabled: false,
-                decoration: _style('Email (non modifiable)'),
-              ),
-              const SizedBox(height: 32),
-              ElevatedButton(
-                onPressed: auth.enCours ? null : _enregistrer,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Couleurs.marron,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size.fromHeight(52),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14)),
-                ),
-                child: const Text('Enregistrer',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 24),
+              BoutonPrincipal(
+                texte: 'Enregistrer',
+                icone: Icons.check,
+                onPressed: _enregistrer,
+                enCours: _enCours,
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  InputDecoration _style(String libelle) => InputDecoration(
-        labelText: libelle,
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      );
-
-  Widget _champ(TextEditingController controleur, String libelle,
-      {TextInputType clavier = TextInputType.text,
-      String? Function(String?)? validation}) {
-    return TextFormField(
-      controller: controleur,
-      keyboardType: clavier,
-      decoration: _style(libelle),
-      validator: validation ??
-          (v) => (v == null || v.trim().isEmpty) ? 'Obligatoire' : null,
     );
   }
 }

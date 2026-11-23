@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/auth_provider.dart';
 import '../theme/couleurs.dart';
@@ -9,13 +9,13 @@ import '../utils/actions.dart';
 ///
 /// Elle affiche le profil de l'utilisateur connecté et le bouton de
 /// déconnexion.
-class BarreLaterale extends StatelessWidget {
+class BarreLaterale extends ConsumerWidget {
   const BarreLaterale({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // watch : la barre se met à jour si l'utilisateur change
-    final utilisateur = context.watch<AuthProvider>().utilisateur;
+    final utilisateur = ref.watch(authProvider);
     final prenom = utilisateur?.prenom ?? '';
     final nom = utilisateur?.nom ?? '';
 
@@ -130,7 +130,7 @@ class BarreLaterale extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              onTap: () => confirmerDeconnexion(context),
+              onTap: () => confirmerDeconnexion(context, ref),
             ),
           ),
         ],

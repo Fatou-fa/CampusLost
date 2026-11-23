@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
-import '../models/annonce_model.dart';
 import '../providers/annonce_provider.dart';
 import '../providers/auth_provider.dart';
 import '../providers/reclamation_provider.dart';
@@ -12,24 +12,21 @@ import '../utils/actions.dart';
 /// Onglet « Profil » (design de Gilbert) : identité de l'utilisateur,
 /// statistiques et menu (modifier le profil, raccourcis, à propos,
 /// déconnexion).
-class ProfilScreen extends StatelessWidget {
-  /// Change d'onglet dans l'écran principal (1 = Mes annonces, 2 = Réclamations).
-  final ValueChanged<int> allerA;
-
-  const ProfilScreen({super.key, required this.allerA});
+class ProfilScreen extends ConsumerWidget {
+  const ProfilScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final moi = context.watch<AuthProvider>().utilisateur;
-    final annonces = context.watch<AnnonceProvider>();
-    final reclamations = context.watch<ReclamationProvider>();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final moi = ref.watch(authProvider);
+    final mesAnnonces = ref.watch(mesAnnoncesProvider);
+    final nbReclamations = ref.watch(reclamationsRecuesProvider).length;
 
     final prenom = majuscule(moi?.prenom ?? '');
     final nom = majuscule(moi?.nom ?? '');
-    final mesAnnonces = moi == null ? <Annonce>[] : annonces.deAuteur(moi.id);
     final nbRestituees = mesAnnonces.where((a) => a.estRestituee).length;
-    final nbReclamations =
-        reclamations.recues(mesAnnonces.map((a) => a.id).toList()).length;
+
+    // go vers un onglet : go_router affiche l'onglet correspondant
+    void allerA(String onglet) => context.go(onglet);
 
     return Scaffold(
       backgroundColor: Couleurs.fond,
@@ -107,18 +104,19 @@ class ProfilScreen extends StatelessWidget {
                     children: [
                       Expanded(
                         child: _statistique('${mesAnnonces.length}', 'Annonces',
-                            () => allerA(1)),
+                            () => allerA(Routes.mesAnnonces)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _statistique('$nbRestituees',
-                            nbRestituees > 1 ? 'Restituées' : 'Restituée', () => allerA(1)),
+                            nbRestituees > 1 ? 'Terminées' : 'Terminée',
+                            () => allerA(Routes.mesAnnonces)),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: _statistique('$nbReclamations',
-                            nbReclamations > 1 ? 'Réclamations' : 'Réclamation',
-                            () => allerA(2)),
+                            nbReclamations > 1 ? 'Demandes' : 'Demande',
+                            () => allerA(Routes.reclamations)),
                       ),
                     ],
                   ),
@@ -135,20 +133,25 @@ class ProfilScreen extends StatelessWidget {
                         _ligneMenu(
                           icone: Icons.edit_outlined,
                           libelle: 'Modifier mon profil',
-                          onTap: () =>
-                              Navigator.pushNamed(context, Routes.modifierProfil),
+                          onTap: () => context.push(Routes.modifierProfil),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
                         _ligneMenu(
                           icone: Icons.list_alt_rounded,
                           libelle: 'Mes annonces',
-                          onTap: () => allerA(1),
+                          onTap: () => allerA(Routes.mesAnnonces),
+                        ),
+                        const Divider(height: 1, color: Couleurs.bordure),
+                        _ligneMenu(
+                          icone: Icons.chat_bubble_outline,
+                          libelle: 'Messages',
+                          onTap: () => context.push(Routes.messages),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
                         _ligneMenu(
                           icone: Icons.inbox_outlined,
-                          libelle: 'Mes réclamations',
-                          onTap: () => allerA(2),
+                          libelle: 'Demandes de récupération',
+                          onTap: () => allerA(Routes.reclamations),
                         ),
                         const Divider(height: 1, color: Couleurs.bordure),
                         _ligneMenu(
@@ -161,7 +164,7 @@ class ProfilScreen extends StatelessWidget {
                           icone: Icons.logout_rounded,
                           libelle: 'Se déconnecter',
                           estDeconnexion: true,
-                          onTap: () => confirmerDeconnexion(context),
+                          onTap: () => confirmerDeconnexion(context, ref),
                         ),
                       ],
                     ),

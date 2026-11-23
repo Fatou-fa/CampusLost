@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../config/routes.dart';
 import '../models/annonce_model.dart';
 import '../providers/annonce_provider.dart';
-import '../providers/auth_provider.dart';
 import '../providers/reclamation_provider.dart';
 import '../theme/couleurs.dart';
 import '../utils/actions.dart';
@@ -13,24 +13,22 @@ import '../widgets/photo_annonce.dart';
 /// Onglet « Mes annonces » (design de Gilbert) : les annonces publiées par
 /// l'utilisateur connecté, en deux listes « En cours » et « Restituées ».
 /// Actions : ouvrir, modifier, marquer comme restituée, supprimer.
-class MesAnnoncesScreen extends StatefulWidget {
+class MesAnnoncesScreen extends ConsumerStatefulWidget {
   const MesAnnoncesScreen({super.key});
 
   @override
-  State<MesAnnoncesScreen> createState() => _MesAnnoncesScreenState();
+  ConsumerState<MesAnnoncesScreen> createState() => _MesAnnoncesScreenState();
 }
 
-class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
+class _MesAnnoncesScreenState extends ConsumerState<MesAnnoncesScreen> {
   // 0 = En cours, 1 = Restituées
   int _ongletActif = 0;
 
   @override
   Widget build(BuildContext context) {
-    final moi = context.watch<AuthProvider>().utilisateur;
-    final mesAnnonces = moi == null
-        ? <Annonce>[]
-        : context.watch<AnnonceProvider>().deAuteur(moi.id);
-    final reclamations = context.watch<ReclamationProvider>();
+    // Annonces de l'utilisateur connecté, recalculées automatiquement
+    final mesAnnonces = ref.watch(mesAnnoncesProvider);
+    final reclamations = ref.watch(reclamationsProvider);
 
     final enCours = mesAnnonces.where((a) => !a.estRestituee).toList();
     final restituees = mesAnnonces.where((a) => a.estRestituee).toList();
@@ -54,7 +52,12 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
               ),
               const SizedBox(height: 20),
 
-              // Sélecteur d'onglets (En cours / Restituées)
+              const SizedBox(height: 6),
+              const Text(
+                'Les objets que vous avez signalés, perdus ou trouvés.',
+                style: TextStyle(fontSize: 14, color: Couleurs.texteDiscret),
+              ),
+              // Sélecteur d'onglets (En cours / Terminées)
               Container(
                 padding: const EdgeInsets.all(4),
                 decoration: BoxDecoration(
@@ -64,7 +67,7 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
                 child: Row(
                   children: [
                     _onglet(0, 'En cours (${enCours.length})'),
-                    _onglet(1, 'Restituées (${restituees.length})'),
+                    _onglet(1, 'Terminées (${restituees.length})'),
                   ],
                 ),
               ),
@@ -82,8 +85,8 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
                           final annonce = affichees[index];
                           // Nombre de réclamations en attente sur cette annonce
                           final enAttente = reclamations
-                              .recues([annonce.id])
-                              .where((r) => r.estEnAttente)
+                              .where((r) =>
+                                  r.annonceId == annonce.id && r.estEnAttente)
                               .length;
                           return _carte(annonce, enAttente);
                         },
@@ -146,14 +149,15 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
           Text(
             enCours
                 ? "Vous n'avez aucune annonce en cours."
-                : "Aucun objet restitué pour l'instant.",
+                : "Aucune annonce terminée pour l'instant.\n"
+                  "Quand un objet est rendu ou retrouvé, l'annonce arrive ici.",
             textAlign: TextAlign.center,
             style: const TextStyle(color: Couleurs.texteDiscret, fontSize: 15),
           ),
           if (enCours) ...[
             const SizedBox(height: 16),
             ElevatedButton.icon(
-              onPressed: () => Navigator.pushNamed(context, Routes.choixType),
+              onPressed: () => context.push(Routes.publier),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Couleurs.marron,
                 foregroundColor: Colors.white,
@@ -172,8 +176,8 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
     final estPerdu = annonce.estPerdue;
     var details = '${annonce.lieu} · ${annonce.date}';
     if (reclamationsEnAttente > 0) {
-      details += ' · $reclamationsEnAttente réclamation'
-          '${reclamationsEnAttente > 1 ? 's' : ''}';
+      details += ' · $reclamationsEnAttente demande'
+          '${reclamationsEnAttente > 1 ? 's' : ''} à traiter';
     }
 
     return Material(
@@ -182,7 +186,7 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: () =>
-            Navigator.pushNamed(context, Routes.detail, arguments: annonce),
+            context.push(Routes.detail(annonce.id)),
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -285,15 +289,14 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
                       child: _bouton(
                         Icons.edit_outlined,
                         'Modifier',
-                        () => Navigator.pushNamed(context, Routes.formulaire,
-                            arguments: annonce),
+                        () => context.push(Routes.modifierAnnonce(annonce.id)),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: _bouton(
                         Icons.check,
-                        estPerdu ? 'Retrouvé' : 'Restitué',
+                        estPerdu ? "Je l'ai retrouvé" : 'Objet rendu',
                         () => _marquerRestituee(annonce),
                       ),
                     ),
@@ -323,25 +326,27 @@ class _MesAnnoncesScreenState extends State<MesAnnoncesScreen> {
   }
 
   Future<void> _marquerRestituee(Annonce annonce) async {
-    final annonces = context.read<AnnonceProvider>();
+    final annonces = ref.read(annoncesProvider.notifier);
     final messager = ScaffoldMessenger.of(context);
     final ok = await confirmer(
       context,
-      titre: annonce.estPerdue ? 'Objet retrouvé ?' : 'Objet restitué ?',
-      message: "L'annonce « ${annonce.titre} » sera retirée de l'accueil "
-          'et rangée dans « Restituées ».',
+      titre: annonce.estPerdue
+          ? 'Vous avez retrouvé votre objet ?'
+          : 'Objet rendu à son propriétaire ?',
+      message: "L'annonce « ${annonce.titre} » ne sera plus visible sur "
+          "l'accueil. Vous la retrouverez dans « Terminées ».",
       action: 'Confirmer',
     );
     if (!ok) return;
     annonces.marquerRestituee(annonce.id);
     messager.showSnackBar(
-      const SnackBar(content: Text('Bravo ! Annonce rangée dans « Restituées »')),
+      const SnackBar(content: Text('Bravo ! Annonce rangée dans « Terminées »')),
     );
   }
 
   Future<void> _supprimer(Annonce annonce) async {
-    final annonces = context.read<AnnonceProvider>();
-    final reclamations = context.read<ReclamationProvider>();
+    final annonces = ref.read(annoncesProvider.notifier);
+    final reclamations = ref.read(reclamationsProvider.notifier);
     final messager = ScaffoldMessenger.of(context);
     final ok = await confirmer(
       context,
